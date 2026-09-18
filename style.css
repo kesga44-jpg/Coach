@@ -128,3 +128,10 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   .match-stats-section{margin-top:22px;padding-top:20px}
   .training-stats-table{min-width:620px}
 }
+
+/* =========================================
+   v2.2.1 · wedstrijdblad
+   ========================================= */
+@media(max-width:560px){
+  .match-toolbar .right .match-sheet-btn{grid-column:1/-1}
+}
