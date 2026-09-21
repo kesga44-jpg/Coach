@@ -1,7 +1,7 @@
 {
   "name":"Football Coach - Full Speed O23",
   "short_name":"Coach O23",
-  "description":"Trainingsplanning, aanwezigheid, teams, wedstrijden, tactiek en oefenbibliotheek.",
+  "description":"Trainingsplanning, aanwezigheid, spelerswaarde, wedstrijden, tactiek en oefenbibliotheek.",
   "start_url":"./",
   "scope":"./",
   "display":"standalone",
