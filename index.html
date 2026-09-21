@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=2.5.0">
+  <link rel="stylesheet" href="style.css?v=2.6.0">
 </head>
 <body>
   <div class="app-shell">
@@ -31,6 +31,7 @@
         <button class="nav-item" data-page="season">▣ <span>Seizoen</span></button>
         <button class="nav-item" data-page="stats">▥ <span>Statistieken</span></button>
         <button class="nav-item" data-page="notes">✎ <span>Coachnotities</span></button>
+        <button class="nav-item" data-page="knowledge">▤ <span>Kennisbank</span></button>
         <button class="nav-item" data-page="documents">⌁ <span>Bronnen</span></button>
         <button class="nav-item" data-page="assistant">✦ <span>Coachassistent</span></button>
         <button class="nav-item" data-page="settings">⚙ <span>Instellingen</span></button>
@@ -63,12 +64,14 @@
     </form>
   </dialog>
   <input id="importFile" type="file" accept="application/json,.json" hidden>
+  <input id="knowledgeFile" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+  <input id="knowledgeFileBulk" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden>
   <input id="docFile" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   <div id="toast" class="toast" role="status"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.12.2/mammoth.browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="app.js?v=2.5.0"></script>
+  <script src="app.js?v=2.6.0"></script>
 </body>
 </html>

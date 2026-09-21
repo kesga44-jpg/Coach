@@ -1,7 +1,7 @@
 {
   "name": "Football Coach - Full Speed O23",
   "short_name": "Coach O23",
-  "description": "Football Coach v2.5 · planning, spelers, KNVB-coachmethodiek en wedstrijdanalyse",
+  "description": "Football Coach v2.6 · planning, spelers, trainingtemplates, KNVB-coachmethodiek en Kennisbank",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
