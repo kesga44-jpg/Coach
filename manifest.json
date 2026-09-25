@@ -1,7 +1,7 @@
 {
   "name": "Football Coach - Full Speed O23",
   "short_name": "Coach O23",
-  "description": "Football Coach v2.7.0 · teamdiagnose, IDP, reflectie, tactische analyse en slimme oefenfilters",
+  "description": "Football Coach v2.7.1 · verbeterde spelerskaart, wedstrijdblad-opmerkingen en iPhone PDF-fix",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

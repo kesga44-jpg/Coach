@@ -206,3 +206,49 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .analysis-step{border-left:4px solid #0b6844;padding-left:12px}
 @media(max-width:900px){.diagnostic-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.diagnostic-big{grid-row:auto}.diagnostic-form{grid-template-columns:1fr}.idp-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.diagnostic-overview{grid-template-columns:1fr 1fr}.diagnostic-big{grid-column:1/-1}.diagnostic-low{align-items:flex-start;flex-direction:column}.diagnostic-low .btn{width:100%}.diagnostic-input{grid-template-columns:1fr 82px}.idp-goal-head{flex-direction:column}.idp-goal-head .row-actions{width:100%}.idp-goal-head .row-actions .btn{flex:1}.exercise-filters{display:grid;grid-template-columns:1fr 1fr}.exercise-filters select{min-width:0;width:100%}.exercise-filters .muted{grid-column:1/-1;margin-left:0}}
+
+/* v2.7.1 · compact spelerskaart + wedstrijdblad opmerkingen */
+.player-profile-summary{overflow:hidden}
+.player-card-top{display:flex;align-items:center;gap:14px;margin:-20px -20px 0;padding:20px;background:linear-gradient(135deg,#0b5d3b,#188257);color:#fff}
+.player-card-top .player-profile-avatar{margin:0;flex:0 0 auto;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);box-shadow:none}
+.player-card-top .player-profile-name{min-width:0}
+.player-card-top .player-profile-name .eyebrow{color:#cfe9db}
+.player-card-top .player-profile-name h2{color:#fff;margin:3px 0 4px;overflow-wrap:anywhere}
+.player-card-top .player-profile-name p:last-child{color:#dcefe5;margin:0}
+.player-profile-tags{margin:14px 0 0}
+.player-card-value-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.player-card-value-strip>div{padding:10px;border:1px solid #dce7e0;border-radius:13px;background:#f6faf8;min-width:0}
+.player-card-value-strip span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:850}
+.player-card-value-strip strong{display:block;font-size:16px;margin-top:3px;color:var(--text)}
+.player-quickfacts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.player-quickfacts>div{padding:10px 11px;border-radius:12px;background:#f7faf8;border:1px solid #e3ebe6;min-width:0}
+.player-quickfacts span{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.player-quickfacts strong{display:block;margin-top:4px;font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.player-availability-note{margin-top:10px}
+.sheet-remark-list{display:grid;gap:8px;margin-top:14px}
+.sheet-remark-row{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(0,1.3fr);gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--line);border-radius:12px;background:#f8fbf9}
+.sheet-remark-row strong,.sheet-remark-row small{display:block}.sheet-remark-row small{margin-top:2px;color:var(--muted);font-size:10px}
+@media(max-width:820px){
+  .player-profile-summary{position:static!important;display:block!important}
+  .player-card-top{display:flex!important;grid-template-columns:none!important}
+  .player-profile-avatar{grid-row:auto!important}
+  .player-profile-tags{grid-column:auto!important}
+}
+@media(max-width:560px){
+  .player-profile-actions{position:static!important;top:auto!important;z-index:auto!important;display:grid!important;grid-template-columns:1fr 1fr;gap:8px;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;padding:0!important;margin:0 0 10px!important}
+  .player-profile-actions>.btn{width:100%;min-width:0}
+  .player-profile-actions>.row-actions{display:contents!important}
+  .player-profile-actions>.row-actions .btn{width:100%;min-width:0;padding:10px 8px;white-space:normal}
+  .player-profile-actions [data-export-player]{grid-column:1/-1}
+  .player-profile-layout{gap:10px}
+  .player-profile-summary{padding:15px!important}
+  .player-card-top{margin:-15px -15px 0;padding:15px;gap:12px}
+  .player-card-top .player-profile-avatar{width:58px!important;height:58px!important;border-radius:17px!important;font-size:19px!important}
+  .player-card-top .player-profile-name h2{font-size:20px!important;line-height:1.08}
+  .player-card-value-strip{gap:6px}
+  .player-card-value-strip>div{padding:8px 7px}
+  .player-card-value-strip strong{font-size:14px}
+  .player-quickfacts{grid-template-columns:1fr 1fr;gap:6px}
+  .player-quickfacts>div{padding:9px}
+  .sheet-remark-row{grid-template-columns:1fr;gap:6px}
+}
