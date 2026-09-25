@@ -1,7 +1,7 @@
 {
   "name": "Football Coach - Full Speed O23",
   "short_name": "Coach O23",
-  "description": "Football Coach v2.7.2 · echte PDF-export en delen op iPhone/iPad",
+  "description": "Football Coach v2.7.4 · wedstrijdblad altijd op één A4 en echte PDF-export op iPhone/iPad",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
