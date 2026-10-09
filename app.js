@@ -147,6 +147,32 @@ const EXERCISE_TEAM_FUNCTIONS=['','Aanvallen','Verdedigen','Omschakelen A→V','
 const EXERCISE_FORMATS=['','1v1','2v2','3v3','4v4','5v5','6v6','7v7','8v8','9v9','10v10','11v11','Overig'];
 const EXERCISE_THEMES=['','Opbouw','Balbezit / positiespel','Pressing','Verdedigen','Omschakelen','Afwerken','1v1','Passing / ontvangen','Breedtespel','Teamtactiek','Conditioneel','Herstel','Overig'];
 const AVAILABILITY_STATUSES=['Fit','Aangepast trainen','Geblesseerd','Terugkeer'];
+function sortPlayersBy(players, sortBy='name') {
+  const playersCopy = clone(players);
+  
+  if (sortBy === 'number') {
+    // Sorteren op rugnummer
+    return playersCopy.sort((a, b) => {
+      const numA = number(a.number) || 999;
+      const numB = number(b.number) || 999;
+      return numA - numB;
+    });
+  }
+  
+  if (sortBy === 'position') {
+    // Sorteren op positiegroep eerst, dan op naam
+    const positionOrder = { keeper: 0, cb: 1, fullback: 2, dm: 3, cm: 4, am: 5, winger: 6, striker: 7, general: 8 };
+    return playersCopy.sort((a, b) => {
+      const posA = positionOrder[positionBucket(a.position)] ?? 8;
+      const posB = positionOrder[positionBucket(b.position)] ?? 8;
+      if (posA !== posB) return posA - posB;
+      return a.name.localeCompare(b.name, 'nl');
+    });
+  }
+  
+  // Default: Sorteren op naam (alfabetisch)
+  return playersCopy.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+}
 function fmtDateTimeIso(v){if(!v)return '–';try{return new Intl.DateTimeFormat('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(v))}catch{return '–'}}
 function currentWeekKey(){const d=new Date(),day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return d.toLocaleDateString('sv-SE')}
 function logActivity(label){state.meta??={};state.meta.activityLog??=[];state.meta.activityLog.unshift({at:new Date().toISOString(),page:ui.page,label:label||pageInfo()?.[0]||'Wijziging'});state.meta.activityLog=state.meta.activityLog.slice(0,30)}
