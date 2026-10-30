@@ -6,6 +6,13 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 - `node --check app.js` — syntaxcontrole
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
 
+### Coach main 2.8.0 — speler-, training- en wedstrijdbeheer
+- Spelernamen worden als `firstName` en `lastName` opgeslagen; oude `name`-waarden worden tijdens normalisatie opgesplitst en blijven als volledige `name` beschikbaar voor bestaande weergaven. Een lege aanmelddatum bij een bestaande speler behoudt de historische meetperiode.
+- Trainingspercentages tellen relevante trainingen vanaf de aanmelddatum mee; sessies vóór de datum tellen niet mee. Meetrainers worden per training apart opgeslagen onder `guestPlayers`, met aanwezigheid via eigen gast-ID's, buiten de structurele spelerspercentages.
+- Per wedstrijd kunnen beschikbaarheidsstatus, toelichting en tijdelijk rugnummer worden opgeslagen. Deze waarden staan op de wedstrijd en veranderen niet de standaardgegevens van een speler; basis en bank weigeren niet-beschikbare spelers en dubbele rugnummers.
+- Versie- en service-worker-cache zijn bijgewerkt naar 2.8.0 zodat mobiele installaties de nieuwe appbestanden ophalen.
+- Gerichte regressietests voor naammigratie, achternaamsortering, trainingsstartdatum, gastregistratie, wedstrijdstatus en rugnummers draaien mee in `node --test app.test.js`.
+
 ## Supabase
 Project `ckodnfshelblddfypmmv`. URL en **publishable** key staan op één plek bovenin `app.js` (`SYNC_PROJECT_URL`, `SYNC_PUBLIC_KEY`). Nooit een `service_role`-key in de browsercode.
 Status: verbinding en backend (tabel, RLS, bucket `vc2`, map `VC2`) zijn nog **niet geverifieerd**. Controle in fase 2: `https://ckodnfshelblddfypmmv.supabase.co` is vanuit de ontwikkelomgeving niet bereikbaar (DNS/netwerkblokkade, curl-exit 6) — dit is een netwerkblokkade, géén vastgestelde configuratiefout. Er zijn geen remote resources gewijzigd.

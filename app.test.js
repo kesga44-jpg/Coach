@@ -366,3 +366,76 @@ test('activiteitengroep: standaardselectie komt overeen met spelers die bij het 
   assert.ok(form.includes('Spelers die bij dit team horen'));
   player.primaryTeamId=primary;player.teamIds=teamIds;
 });
+
+test('legacy spelersnaam wordt opgesplitst en alle bestaande spelergegevens blijven behouden',()=>{
+  const d=starter(),p=d.players[0],id=p.id,number=p.number,teamIds=[...p.teamIds];
+  p.name='Jan de Vries';delete p.firstName;delete p.lastName;delete p.startDate;
+  const a=createApp({store:{[V2]:JSON.stringify(d)}}),migrated=a.t.state.players.find(x=>x.id===id);
+  assert.strictEqual(migrated.firstName,'Jan');assert.strictEqual(migrated.lastName,'de Vries');
+  assert.strictEqual(a.t.playerFullName(migrated),'Jan de Vries');assert.strictEqual(migrated.name,'Jan de Vries');
+  assert.strictEqual(migrated.number,number);assert.deepStrictEqual(Array.from(migrated.teamIds),teamIds);
+  assert.strictEqual(migrated.startDate,'');
+});
+test('spelersformulier heeft aparte naamvelden en sorteert op achternaam',()=>{
+  const a=createApp(),p={id:'p',firstName:'Zoe',lastName:'Bakker',name:'Zoe Bakker'};
+  const form=a.t.playerForm(p);
+  assert.match(form,/id="fFirstName"/);assert.match(form,/id="fLastName"/);assert.match(form,/id="fStartDate"/);
+  assert.match(a.t.playerForm({}),/<input id="fName" type="hidden" value="">/);
+  a.t.state.players=[{id:'b',firstName:'Zoe',lastName:'Bakker',name:'Zoe Bakker',active:true,primaryTeamId:'t',teamIds:['t']},{id:'a',firstName:'Adam',lastName:'Jansen',name:'Adam Jansen',active:true,primaryTeamId:'t',teamIds:['t']}];
+  assert.deepStrictEqual(Array.from(a.t.playersForTeam('t').map(x=>x.id)),['b','a']);
+});
+test('trainingspercentage sluit sessies voor startdatum uit en telt relevante sessies mee',()=>{
+  const a=createApp(),teamId=a.t.state.teams[0].id;
+  a.t.state.players=[{id:'joiner',name:'Sam de Jong',firstName:'Sam',lastName:'de Jong',primaryTeamId:teamId,teamIds:[teamId],active:true,startDate:'2026-02-01'}];
+  a.t.state.trainings=[
+    {id:'old',teamId,date:'2026-01-20',attendance:{joiner:'Afwezig'}},
+    {id:'present',teamId,date:'2026-02-03',attendance:{joiner:'Aanwezig'}},
+    {id:'absent',teamId,date:'2026-02-10',attendance:{},guestPlayers:[{id:'g1',name:'Gast',teamName:'O23-2'}]}
+  ];
+  a.t.normalize();
+  assert.strictEqual(a.t.attendancePct('joiner',teamId),50);
+  const stats=a.t.attendanceStatsForTrainings('joiner',a.t.state.trainings);
+  assert.strictEqual(stats.pct,50);assert.strictEqual(stats.filled,1);assert.strictEqual(stats.relevant,2);
+  a.t.state.players[0].startDate='2026-02-04';
+  assert.strictEqual(a.t.attendancePct('joiner',teamId),0);
+  const counts=a.t.eventAttendanceCounts(a.t.state.trainings[2]);
+  assert.strictEqual(counts.total,a.t.eventPlayerIds(a.t.state.trainings[2]).length+1);
+});
+test('wedstrijdstatus is per wedstrijd, tijdelijke nummers overschrijven het profielnummer niet',()=>{
+  const a=createApp(),p={id:'p',name:'Sam de Jong',firstName:'Sam',lastName:'de Jong',number:'9',primaryTeamId:'t',teamIds:['t'],active:true};
+  a.t.state.players=[p];
+  const m={id:'m',teamId:'t',availability:{p:{status:'Geblesseerd',reason:'Knie'}},playerNumbers:{p:'17'},lineup:{},benchIds:[],formation:'4-3-3'};
+  a.t.state.matches=[m];a.t.normalize();
+  assert.strictEqual(a.t.matchPlayerAvailable(m,'p'),false);
+  assert.strictEqual(a.t.matchPlayerNumber(m,p),'17');assert.strictEqual(p.number,'9');
+  assert.strictEqual(a.t.matchPlayerAvailable(a.t.state.matches[0],'p'),false);
+  assert.strictEqual(a.t.matchPlayerAvailable({availability:{}},'p'),true);
+});
+test('dubbele rugnummers in basis en bank worden herkend',()=>{
+  const a=createApp(),p1={id:'p1',name:'A',firstName:'A',lastName:'',number:'7'},p2={id:'p2',name:'B',firstName:'B',lastName:'',number:'8'};
+  a.t.state.players=[p1,p2];
+  const m={id:'m',lineup:{GK:'p1'},benchIds:['p2'],playerNumbers:{p2:'07'},availability:{}};
+  assert.strictEqual(a.t.duplicateMatchNumbers(m).length,1);
+  assert.ok(a.t.selectionWarnings(m).some(x=>x.includes('Dubbel rugnummer')));
+});
+test('trainingsweergave scheidt vaste spelers en meetrainers',()=>{
+  const a=createApp(),teamId=a.t.state.teams[0].id;
+  a.t.state.trainings=[{id:'tr',teamId,date:'2026-02-01',attendance:{'guest:g1':'Aanwezig'},guestPlayers:[{id:'g1',name:'Gastspeler',teamName:'O23-2'}]}];
+  a.t.normalize();
+  const html=a.t.renderAttendance();
+  assert.ok(html.includes('Vaste '));assert.ok(html.includes('Meetrainers (1)'));
+  assert.ok(html.includes('Gastspeler'));assert.ok(html.includes('guest:g1'));
+});
+test('wedstrijdscherm toont status en wedstrijdnummer zonder standaardnummer te wijzigen',()=>{
+  const a=createApp(),m=a.t.state.matches[0],p=a.t.state.players[0];
+  a.t.state.matches=[m];
+  m.availability[p.id]={status:'Beschikbaar',reason:''};
+  m.playerNumbers[p.id]='23';m.lineup.GK=p.id;
+  const lineup=a.t.renderLineupBoard(m),sheetPlayers=a.t.matchSheetSelectedPlayers(m);
+  assert.ok(lineup.includes('#23'));assert.ok(sheetPlayers.some(x=>x.id===p.id&&x.name.includes('#23')));
+  m.availability[p.id]={status:'Geblesseerd',reason:'Knieblessure'};
+  const html=a.t.renderMatches();
+  assert.ok(html.includes('Beschikbaarheid & rugnummers'));assert.ok(html.includes('Knieblessure'));
+  assert.ok(!a.t.renderLineupBoard(m).includes('#23'));assert.ok(!a.t.matchSheetSelectedPlayers(m).some(x=>x.id===p.id));
+  assert.notStrictEqual(p.number,'23');
+});
