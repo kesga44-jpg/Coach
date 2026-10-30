@@ -352,3 +352,17 @@ test('template opslaan/verwijderen: opslagfout draait state terug',()=>{
   a.ls.failWrites=true;r(`deleteTrainingTemplate('${id}')`);
   assert.strictEqual(r('state.templates.trainings.length'),1);
 });
+
+test('activiteitengroep: standaardselectie komt overeen met spelers die bij het team horen',()=>{
+  const vm=require('vm'),a=createApp(),r=code=>vm.runInContext(code,a.sandbox);
+  const t=a.t.state.trainings[0],player=a.t.state.players[0],primary=player.primaryTeamId,teamIds=[...player.teamIds];
+  const other='team-other';
+  a.t.state.teams.push({id:other,name:'Ander team'});
+  player.primaryTeamId=other;
+  player.teamIds=[other,t.teamId];
+  const form=r(`squadForm(trainingById('${t.id}'))`);
+  assert.ok(r(`eventSquad(trainingById('${t.id}')).some(p=>p.id==='${player.id}')`));
+  assert.match(form,new RegExp(`name="squadPlayer" value="${player.id}" checked`));
+  assert.ok(form.includes('Spelers die bij dit team horen'));
+  player.primaryTeamId=primary;player.teamIds=teamIds;
+});
