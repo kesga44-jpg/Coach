@@ -10,7 +10,7 @@ function createApp({store={},failWrites=false,confirmAnswer=true}={}){
     confirm:()=>confirmAnswer,alert(){},fetch:async()=>{throw new Error('geen netwerk')},crypto:require('crypto').webcrypto,TextEncoder,TextDecoder,btoa,atob,URL,Blob,Intl,Date,JSON};
   win.window=win;Object.assign(win,sandbox,{window:win});
   const ctx=vm.createContext(sandbox);
-  const src=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8')+`
+  const src=fs.readFileSync(path.join(__dirname,'app.js'),'utf8')+`
 ;globalThis.__t={get state(){return state},set state(v){state=v},get storageLoadError(){return storageLoadError},save,load,validateStateData,persistRemoteCopy,writeCloudCopy,pushSync,pullSync,fetchCloudCopy,ensureSession,authSignIn,authSignUp,authSignOut,getAuthSession,storeAuthSession,AUTH_KEY,SYNC_ROW_ID,normalizedStateCopy,STORAGE_KEY,LEGACY_STORAGE_KEY,RECOVERY_BACKUP_KEY,CLOUD_CONFLICT_KEY,SYNC_ACCOUNT_KEY,checkNewSyncPass,initialSync,encryptData,decryptData,syncIdFromPass,vc2Index,vc2Passages,vc2IsSearchable,addExerciseToTraining,STANDARD_PRINCIPLES,seedStandardPrinciples,vc2FileMatches,toastLog:()=>__toasts};`;
   sandbox.__toasts=toasts;
   vm.runInContext(src.replace(/function toast\(msg\)\{/,'function toast(msg){__toasts.push(msg);'),ctx,{filename:'app.js'});
