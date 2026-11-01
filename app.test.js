@@ -471,13 +471,16 @@ test('wedstrijdblad: geen speler in meerdere categorieën en lege onderdelen ver
   m.promotedFirstIds=[];m.promotedO232Ids=[];m.availability={};
   const empty=a.t.buildMatchSheetHtml(m);assert.ok(!empty.includes('Doorgeschoven naar'));assert.ok(!empty.includes('class="cat '));
 });
-test('wedstrijdblad: volledige selectie loopt over twee A4-pagina’s en export toont actuele data',()=>{
+test('wedstrijdblad: grote selectie en alle extra informatie blijven op één A4-pagina',()=>{
   const {a,m,team}=sheetFixture();
   const many=Array.from({length:30},(_,i)=>({id:'x'+i,firstName:'Speler',lastName:'N'+i,name:'Speler N'+i,number:String(20+i),primaryTeamId:team,teamIds:[team],active:true}));
   a.t.state.players.push(...many);m.lineup={};m.benchIds=many.map(p=>p.id);
   const pages=a.t.matchSheetPages(a.t.matchSheetModel(m));
-  assert.ok(pages.length>=2);assert.strictEqual(pages.reduce((n,p)=>n+p.rows.length,0),30);
-  assert.strictEqual((a.t.buildMatchSheetHtml(m).match(/<main class="sheet">/g)||[]).length,pages.length);
+  assert.strictEqual(pages.length,1);assert.strictEqual(pages[0].rows.length,30);assert.strictEqual(pages[0].extras,true);
+  const html=a.t.buildMatchSheetHtml(m);
+  assert.strictEqual((html.match(/<main class="sheet">/g)||[]).length,1);
+  assert.ok(html.includes('class="sheet-content"'));assert.ok(html.includes('--sheet-fit'));
+  assert.ok(html.includes('content.scrollHeight'));assert.ok(html.includes('copy.clientHeight'));
   m.opponent='Nieuwe Tegenstander';assert.ok(a.t.buildMatchSheetHtml(m).includes('Nieuwe Tegenstander'));
   m.benchIds=[];m.lineup={GK:'gk'};assert.strictEqual(a.t.matchSheetPages(a.t.matchSheetModel(m)).length,1);
 });
