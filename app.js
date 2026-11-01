@@ -1504,7 +1504,7 @@ function matchSheetModel(m,sortBy){
   return {
     teamTitle:`D.S.V. Full Speed ${label}`,label,opponent:value(m.opponent),date:m.date||'',startTime:value(m.startTime),gatherTime:value(m.gatherTime),
     homeAway:value(m.homeAway),competition:value(m.competition),venue:value(m.venue),info,practical,instructions:value(m.sheetNote||m.notes),
-    rows:players.map(p=>({id:p.id,number:String(matchPlayerNumber(m,p)||''),name:playerFullName(p),remark:m.sheetRemarks?.[p.id]||'',fromTeam:p.primaryTeamId&&p.primaryTeamId!==m.teamId?teamName(p.primaryTeamId):''})),
+    rows:players.map(p=>({id:p.id,number:String(matchPlayerNumber(m,p)||''),name:playerFullName(p),firstName:p.firstName||'',lastName:p.lastName||'',remark:m.sheetRemarks?.[p.id]||'',fromTeam:p.primaryTeamId&&p.primaryTeamId!==m.teamId?teamName(p.primaryTeamId):''})),
     promotedFirst,promotedOther,injured,absent
   };
 }
@@ -1516,7 +1516,7 @@ function matchSheetPages(md){
 function buildMatchSheetHtml(m,sortBy){
   const md=matchSheetModel(m,sortBy),pages=matchSheetPages(md),total=pages.length;
   const tile=x=>`<div class="tile${x.label==='Verzamelen'?' gather':''}"><span>${esc(x.label)}</span><strong>${esc(x.value)}</strong></div>`;
-  const row=(x,i)=>`<tr><td class="num">${esc(x.number||'–')}</td><td class="name">${esc(x.name)}${x.fromTeam?`<small class="from">${esc(x.fromTeam)}</small>`:''}</td><td class="remarks">${esc(x.remark)}</td></tr>`;
+  const row=(x,i)=>`<tr><td class="num">${esc(x.number||'–')}</td><td class="name">${x.firstName||x.lastName?`<span class="fn">${esc(x.firstName)}</span> <span class="ln">${esc(x.lastName)}</span>`:esc(x.name)}${x.fromTeam?`<small class="from">${esc(x.fromTeam)}</small>`:''}</td><td class="remarks">${esc(x.remark)}</td></tr>`;
   const cat=(title,list,cls)=>list.length?`<section class="cat ${cls}"><h3>${title}<b>${list.length}</b></h3><ul>${list.map(i=>`<li><strong>${esc(i.name)}${i.team?` <small>(${esc(i.team)})</small>`:''}</strong>${i.note?`<em>${esc(i.note)}</em>`:''}</li>`).join('')}</ul></section>`:'';
   const extras=()=>{
     const blocks=[cat('Afwezig',md.absent,'absent'),cat('Geblesseerd',md.injured,'injured'),cat('Doorgeschoven naar het eerste elftal',md.promotedFirst,'promo'),cat('Doorgeschoven naar een ander team',md.promotedOther,'promo')].filter(Boolean);
@@ -1531,32 +1531,34 @@ function buildMatchSheetHtml(m,sortBy){
     return `<main class="sheet"><div class="watermark">FS</div><div class="sheet-content">${header(pg.first)}${table}${pg.extras?extras():''}<footer class="page-footer"><span>D.S.V. Full Speed · Delft</span><span class="right">${esc(md.label)}</span></footer></div></main>`;
   }).join('');
   return `<!doctype html><html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedstrijdselectie ${esc(md.label)} - ${esc(md.opponent||'wedstrijd')}</title><style>
-@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#e6eee9;color:#12372a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
-.print-actions{position:sticky;top:0;z-index:20;display:flex;justify-content:center;gap:10px;padding:12px;background:rgba(230,238,233,.96);border-bottom:1px solid #cddbd3}.print-actions button{border:1px solid #bcd0c4;background:#fff;color:#12372a;border-radius:12px;padding:12px 16px;font:700 15px inherit;cursor:pointer}.print-actions .primary{background:#08643f;color:#fff;border-color:#08643f}
-.sheet{width:210mm;height:297mm;margin:14px auto;background:#fff;padding:10mm 11mm 8mm;box-shadow:0 10px 35px rgba(18,55,42,.14);position:relative;overflow:hidden;display:flex;flex-direction:column}
-.watermark{position:absolute;right:-12mm;top:-6mm;font-size:92mm;font-weight:900;color:#f0f5f2;line-height:1;letter-spacing:-8mm;z-index:0;user-select:none}.sheet-content{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100%;transform:scale(var(--sheet-fit,1));transform-origin:top left;width:calc(100% / var(--sheet-fit,1));height:calc(100% / var(--sheet-fit,1))}
-.header{display:grid;grid-template-columns:24mm 1fr;gap:6mm;align-items:center;background:#07583a;color:#fff;border-radius:3mm;padding:4mm 5mm}.header.small{padding:2.5mm 4mm;grid-template-columns:14mm 1fr}.crest{width:21mm;height:21mm;object-fit:contain;background:#fff;border-radius:50%;padding:1mm;display:block}.header.small .crest{width:12mm;height:12mm}
-.subtitle{font-size:8.5pt;letter-spacing:2.6pt;text-transform:uppercase;color:#bfe3cf;font-weight:700}.title{font-size:22pt;line-height:1.1;font-weight:900;margin:1mm 0;white-space:nowrap}.header.small .title{font-size:14pt}.vs{font-size:13pt;color:#e4f4ea}.vs strong{font-size:16pt;color:#fff}.header.small .vs{font-size:9pt}
-.tiles{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:3mm;margin-top:3.5mm}.tile{border:1px solid #cfe0d6;border-left:2mm solid #08643f;border-radius:2mm;background:#f4f8f5;padding:2.5mm 3.5mm}.tile span{display:block;font-size:8pt;letter-spacing:1.4pt;text-transform:uppercase;color:#5d7469;font-weight:700}.tile strong{display:block;font-size:14pt;white-space:nowrap}.tile.gather{background:#08643f;color:#fff;border-color:#064f34}.tile.gather span{color:#c8e8d6}
-.info-card{margin-top:3mm;border:1px solid #d6e3db;border-radius:2mm;padding:2.5mm 4mm;display:grid;grid-template-columns:1fr 1fr;gap:1.5mm 8mm}.info-row{display:grid;grid-template-columns:28mm 1fr;gap:2mm;font-size:10.5pt;align-items:baseline}.info-row span{color:#5d7469}.info-row strong{color:#12372a}
-.selection-head{margin-top:4mm;background:#07583a;color:#fff;border-radius:2mm 2mm 0 0;padding:2.4mm 4mm;display:flex;justify-content:space-between;align-items:center}.selection-head h2{font-size:14pt;margin:0}.selection-head span{font-size:10pt;opacity:.9}
-.selection-table{width:100%;border-collapse:collapse;border:1px solid #d6e3db;border-top:0;font-size:10.5pt}.selection-table th{background:#e8f1ec;color:#1b5b44;text-align:left;padding:1.6mm 2.4mm;border-bottom:1px solid #cfdcd4;font-size:9pt;text-transform:uppercase;letter-spacing:.8pt}
-.selection-table td{padding:0 2.4mm;border-bottom:1px solid #e2eae5;height:6.6mm;white-space:nowrap}.selection-table tr:nth-child(even) td{background:#f7faf8}.selection-table .num{width:16mm;text-align:center;font-weight:900;color:#07583a;font-size:12pt;border-right:1px solid #d6e3db}.selection-table .name{font-weight:700;width:84mm}.selection-table .remarks{white-space:normal;font-size:9.5pt;color:#3a574b}.from{margin-left:2mm;font-weight:600;color:#7a5a00;background:#fff3cd;border-radius:1.5mm;padding:.2mm 1.6mm;font-size:8pt}
-.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:3.5mm}.cat{border:1px solid #d6e3db;border-radius:2mm;overflow:hidden;break-inside:avoid}.cat h3{margin:0;padding:1.8mm 3mm;font-size:10pt;display:flex;justify-content:space-between;background:#e8f1ec;color:#07583a}.cat.absent h3{background:#fde7e4;color:#8f2a1f}.cat.injured h3{background:#fff0d9;color:#8a5200}.cat h3 b{font-weight:800}
-.cat ul{list-style:none;margin:0;padding:1.5mm 3mm}.cat li{display:grid;grid-template-columns:auto 1fr;gap:2mm;font-size:10pt;padding:.7mm 0;align-items:baseline}.cat li strong{white-space:nowrap}.cat li small{font-weight:600;color:#5d7469}.cat li em{font-style:normal;color:#4a6358;font-size:9pt}
-.practical{margin-top:3.5mm;border:1px solid #d6e3db;border-radius:2mm;padding:2.5mm 4mm}.practical h3{margin:0 0 1.5mm;font-size:10pt;color:#07583a;text-transform:uppercase;letter-spacing:1pt}.practical-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5mm 8mm}.practical-grid span{display:block;font-size:8.5pt;color:#5d7469}.practical-grid strong{font-size:10.5pt}.note-text{font-size:10pt;line-height:1.45}
-.page-footer{margin-top:auto;padding-top:3mm;display:flex;align-items:center;gap:4mm;color:#6b7f75;font-size:7pt;letter-spacing:1.6pt;text-transform:uppercase}.page-footer:after{content:"";height:1px;background:#bdcbc3;flex:1;order:1}.page-footer .right{margin-left:auto;order:2}.empty-selection{padding:8mm;text-align:center;color:#6b7f75;white-space:normal!important}
-.hint{max-width:210mm;margin:8px auto;color:#4f665c;font-size:13px;text-align:center}
-@media screen and (max-width:820px){.sheet{width:100%;height:auto;min-height:0;margin:0 0 10px;box-shadow:none;padding:14px}.watermark{font-size:60vw;right:-8vw}.title{font-size:6vw;white-space:normal}.header{grid-template-columns:16vw 1fr;padding:12px}.crest{width:16vw;height:16vw}.tiles{grid-auto-flow:row;grid-auto-columns:auto;gap:8px}.tile strong{font-size:19px}.info-card,.cat-grid,.practical-grid{grid-template-columns:1fr}.info-row{font-size:16px;grid-template-columns:110px 1fr}.selection-table{font-size:17px}.selection-table td{height:auto;padding:9px 8px}.selection-table .num{width:52px;font-size:19px}.selection-table .name{width:auto}.selection-table .remarks{font-size:13px}.cat li{font-size:16px}.vs{font-size:16px}.vs strong{font-size:19px}.hint{font-size:12px;padding:0 10px}.print-actions button{font-size:14px;padding:10px 12px}}
-@media print{html,body{width:210mm;margin:0!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.print-actions,.hint{display:none!important}.sheet{margin:0!important;box-shadow:none!important;page-break-after:always;break-after:page}.sheet:last-of-type{page-break-after:avoid;break-after:avoid}}
+@page{size:A4 portrait;margin:0}*{box-sizing:border-box}html,body{margin:0;padding:0;background:#dfe5e1;color:#0d2a1b;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
+.print-actions{position:sticky;top:0;z-index:20;display:flex;justify-content:center;gap:10px;padding:12px;background:#064a27;border-bottom:3px solid #fff}.print-actions button{border:2px solid #fff;background:transparent;color:#fff;border-radius:0;padding:12px 16px;font:800 15px inherit;text-transform:uppercase;letter-spacing:.5px;cursor:pointer}.print-actions .primary{background:#fff;color:#064a27}
+.sheet{width:210mm;height:297mm;margin:14px auto;background:#fff;padding:0;position:relative;overflow:hidden;display:flex;flex-direction:column;border-left:5mm solid #0a7c3a}
+.watermark{position:absolute;right:-4mm;bottom:3mm;font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-size:135mm;font-weight:900;font-style:italic;color:#e8f3ec;line-height:.8;z-index:0;user-select:none;pointer-events:none}
+.sheet-content{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100%;padding:0 10mm 7mm 8mm;transform:scale(var(--sheet-fit,1));transform-origin:top left;width:calc(100% / var(--sheet-fit,1));height:calc(100% / var(--sheet-fit,1))}
+.header{display:grid;grid-template-columns:26mm 1fr;gap:6mm;align-items:center;background:#0a7c3a;color:#fff;margin:0 -10mm 0 -8mm;padding:6mm 10mm 6mm 8mm;border-bottom:2mm solid #fff;box-shadow:0 1.2mm 0 #064a27}.header.small{padding:3mm 10mm 3mm 8mm;grid-template-columns:15mm 1fr}
+.crest{width:26mm;height:26mm;object-fit:contain;background:#fff;padding:1.2mm;display:block}.header.small .crest{width:14mm;height:14mm;padding:.8mm}
+.subtitle{font-size:8.5pt;letter-spacing:3pt;text-transform:uppercase;color:#fff;font-weight:800;opacity:.85}.title{font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-size:22pt;line-height:1.05;font-weight:900;margin:1mm 0 1.5mm;text-transform:uppercase;white-space:nowrap}.header.small .title{font-size:13pt}.vs{font-size:12pt;font-weight:700;text-transform:uppercase;letter-spacing:1pt;color:#fff}.vs strong{font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-size:17pt;color:#fff;letter-spacing:0}.header.small .vs{font-size:9pt}
+.tiles{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;margin-top:4mm;border-top:.8mm solid #0d2a1b;border-bottom:.3mm solid #0d2a1b;background:#fff}.tile{padding:2.2mm 3.5mm;border-left:.3mm solid #b9c9bf}.tile:first-child{border-left:0;padding-left:0}.tile span{display:block;font-size:7.5pt;letter-spacing:1.6pt;text-transform:uppercase;color:#0a7c3a;font-weight:800}.tile strong{display:block;font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-size:15pt;white-space:nowrap}.tile.gather{background:#0a7c3a;color:#fff;border-left:0}.tile.gather span{color:#fff;opacity:.85}
+.info-card{margin-top:2.5mm;padding:1mm 0 2.5mm;border-bottom:.3mm solid #b9c9bf;display:grid;grid-template-columns:1fr 1fr;gap:1.2mm 8mm}.info-row{display:grid;grid-template-columns:33mm 1fr;gap:2mm;font-size:10.5pt;align-items:baseline}.info-row span{color:#0a7c3a;font-size:8pt;font-weight:800;text-transform:uppercase;letter-spacing:1pt}.info-row strong{color:#0d2a1b}
+.selection-head{margin-top:4mm;background:#0d2a1b;color:#fff;padding:2.2mm 4mm;display:flex;justify-content:space-between;align-items:center;border-left:2mm solid #0a7c3a}.selection-head h2{font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-size:13pt;margin:0;text-transform:uppercase;letter-spacing:1.5pt}.selection-head span{font-size:10pt;font-weight:700}
+.selection-table{width:100%;border-collapse:collapse;border-bottom:.5mm solid #0d2a1b;font-size:10.5pt}.selection-table th{color:#0a7c3a;text-align:left;padding:1.6mm 2.4mm;border-bottom:.5mm solid #0a7c3a;font-size:8pt;text-transform:uppercase;letter-spacing:1.2pt;font-weight:800}
+.selection-table td{padding:0 2.4mm;border-bottom:.2mm solid #c9d6ce;height:6.6mm;white-space:nowrap}.selection-table tr:nth-child(even) td{background:rgba(10,124,58,.06)}.selection-table .num{width:16mm;text-align:center;font-family:"Arial Black",Impact,Helvetica,Arial,sans-serif;font-weight:900;color:#fff;background:#0a7c3a!important;font-size:12pt;border-bottom:.2mm solid #fff}.selection-table th.num{background:transparent!important;color:#0a7c3a;font-size:8pt;font-family:inherit}.selection-table .name{width:84mm}.selection-table .fn{font-weight:500}.selection-table .ln{font-weight:900;text-transform:uppercase;letter-spacing:.3pt}.selection-table .remarks{white-space:normal;font-size:9.5pt;color:#2f4a3c}.from{margin-left:2mm;font-weight:700;color:#0a7c3a;border:.3mm solid #0a7c3a;padding:.1mm 1.4mm;font-size:8pt}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:3.5mm}.cat{border-top:.8mm solid #0a7c3a;break-inside:avoid}.cat h3{margin:0;padding:1.6mm 0;font-size:9.5pt;display:flex;justify-content:space-between;text-transform:uppercase;letter-spacing:1pt;color:#0a7c3a;border-bottom:.2mm solid #c9d6ce}.cat.absent{border-top-color:#a32c20}.cat.absent h3{color:#a32c20}.cat.injured{border-top-color:#d4881a}.cat.injured h3{color:#a35f00}.cat h3 b{font-weight:900}
+.cat ul{list-style:none;margin:0;padding:1mm 0}.cat li{display:grid;grid-template-columns:auto 1fr;gap:2mm;font-size:10pt;padding:.7mm 0;align-items:baseline}.cat li strong{white-space:nowrap}.cat li small{font-weight:600;color:#4a6358}.cat li em{font-style:normal;color:#3d5649;font-size:9pt}
+.practical{margin-top:3.5mm;border-top:.8mm solid #0d2a1b;padding:2mm 0 0}.practical h3{margin:0 0 1.5mm;font-size:9.5pt;color:#0a7c3a;text-transform:uppercase;letter-spacing:1.5pt}.practical-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5mm 8mm}.practical-grid span{display:block;font-size:8pt;color:#0a7c3a;font-weight:800;text-transform:uppercase;letter-spacing:1pt}.practical-grid strong{font-size:10.5pt}.note-text{font-size:10pt;line-height:1.45}
+.page-footer{margin-top:auto;padding-top:3mm;display:flex;align-items:center;gap:4mm;color:#0a7c3a;font-size:7.5pt;font-weight:800;letter-spacing:1.8pt;text-transform:uppercase}.page-footer:after{content:"";height:.8mm;background:#0a7c3a;flex:1;order:1}.page-footer .right{margin-left:auto;order:2}.empty-selection{padding:8mm;text-align:center;color:#4a6358;white-space:normal!important}
+.hint{max-width:210mm;margin:8px auto;color:#3d5649;font-size:13px;text-align:center}
+@media screen and (max-width:820px){.sheet{width:100%;height:auto;min-height:0;margin:0 0 10px;border-left-width:3vw}.watermark{font-size:95vw;right:-6vw;bottom:0}.sheet-content{padding:0 14px 14px 12px}.title{font-size:6vw;white-space:normal}.header{grid-template-columns:18vw 1fr;margin:0 -14px 0 -12px;padding:14px 14px 14px 12px}.crest{width:18vw;height:18vw}.tiles{grid-auto-flow:row;grid-auto-columns:auto}.tile{border-left:0;border-top:.3mm solid #b9c9bf;padding-left:0}.tile.gather{padding-left:8px}.tile strong{font-size:20px}.info-card,.cat-grid,.practical-grid{grid-template-columns:1fr}.info-row{font-size:16px;grid-template-columns:110px 1fr}.selection-table{font-size:17px}.selection-table td{height:auto;padding:9px 8px}.selection-table .num{width:52px;font-size:19px}.selection-table .name{width:auto}.selection-table .remarks{font-size:13px}.cat li{font-size:16px}.vs{font-size:14px}.vs strong{font-size:19px}.hint{font-size:12px;padding:0 10px}.print-actions button{font-size:14px;padding:10px 12px}}
+@media print{html,body{width:210mm;margin:0!important;background:#fff!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}.print-actions,.hint{display:none!important}.sheet{margin:0!important;page-break-after:always;break-after:page}.sheet:last-of-type{page-break-after:avoid;break-after:avoid}}
 </style></head><body><div class="print-actions"><button onclick="if(history.length>1){history.back()}else{window.close()}">← Terug</button><button class="primary" data-fc-pdf-button="1" onclick="handlePdfAction(event)">PDF voorbereiden…</button></div><div class="hint">Op iPhone/iPad: wacht tot “Deel PDF → Boeken” verschijnt. Tik erop en kies Boeken in het iOS-deelvenster.</div>${sheets}${printablePdfRuntime(matchSheetFileName(m,'pdf'),{pages:true})}</body></html>`;
 }
 
 /* WhatsApp-afbeelding (4:5, PNG) – tekent rechtstreeks op een canvas vanuit hetzelfde model */
-const MATCH_IMAGE_FONT='-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif';
+const MATCH_IMAGE_FONT='"Helvetica Neue",Helvetica,Arial,sans-serif',MATCH_IMAGE_HEAD='"Arial Black",Impact,Helvetica,Arial,sans-serif';
 function fitFont(ctx,text,maxW,size,weight='700',min=18){
-  let s=size;ctx.font=`${weight} ${s}px ${MATCH_IMAGE_FONT}`;
-  while(s>min&&ctx.measureText(text).width>maxW){s-=2;ctx.font=`${weight} ${s}px ${MATCH_IMAGE_FONT}`}
+  let s=size;const fam=weight==='900'?MATCH_IMAGE_HEAD:MATCH_IMAGE_FONT;ctx.font=`${weight} ${s}px ${fam}`;
+  while(s>min&&ctx.measureText(text).width>maxW){s-=2;ctx.font=`${weight} ${s}px ${fam}`}
   return s;
 }
 function drawFit(ctx,text,x,y,maxW,size,weight,color,min,align='left'){
@@ -1569,54 +1571,70 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke){
   if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=2;ctx.stroke()}
 }
 function drawMatchImage(ctx,md,W,H,logo){
-  const P=48,GREEN='#07583a',DARK='#12372a',MUTED='#5d7469';
-  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
-  ctx.font=`900 760px ${MATCH_IMAGE_FONT}`;ctx.fillStyle='#eef4f0';ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillText('FS',W+40,Math.min(H,1350)*.62);
-  ctx.fillStyle=GREEN;ctx.fillRect(0,0,W,215);
-  ctx.beginPath();ctx.arc(P+65,107,65,0,Math.PI*2);ctx.fillStyle='#ffffff';ctx.fill();
-  if(logo)try{ctx.save();ctx.beginPath();ctx.arc(P+65,107,60,0,Math.PI*2);ctx.clip();ctx.drawImage(logo,P+15,57,100,100);ctx.restore()}catch(e){}
-  drawFit(ctx,'WEDSTRIJDSELECTIE',P+170,66,W-P*2-170,24,'700','#bfe3cf',18);
-  drawFit(ctx,md.teamTitle,P+170,118,W-P*2-170,50,'900','#ffffff',28);
-  if(md.opponent)drawFit(ctx,`tegen ${md.opponent}`,P+170,166,W-P*2-170,36,'700','#e4f4ea',22);
-  let y=0;
+  const P=48,GREEN='#0a7c3a',DARK='#0d2a1b',MUTED='#3d5649',LINE='#c9d6ce';
+  const rect=(x,y,w,h,c)=>{ctx.fillStyle=c;ctx.fillRect(x,y,w,h)};
+  rect(0,0,W,H,'#ffffff');
+  ctx.save();ctx.font=`900 italic 820px ${MATCH_IMAGE_HEAD}`;ctx.fillStyle='#e8f3ec';ctx.textAlign='right';ctx.textBaseline='alphabetic';ctx.fillText('FS',W+30,H-60);ctx.restore();
+  rect(0,0,22,H,GREEN);
+  const HX=P+22,HW=W-HX-P,TX=HX+190;
+  rect(0,0,W,236,GREEN);rect(0,236,W,12,'#ffffff');rect(0,248,W,8,'#064a27');rect(0,0,22,H,GREEN);
+  rect(HX,38,160,160,'#ffffff');
+  if(logo){try{const r=Math.min(144/logo.width,144/logo.height),w=logo.width*r,h=logo.height*r;ctx.drawImage(logo,HX+(160-w)/2,38+(160-h)/2,w,h)}catch(e){}}
+  drawFit(ctx,'WEDSTRIJDSELECTIE',TX,76,W-TX-P,22,'700','#ffffff',16);
+  drawFit(ctx,md.teamTitle.toUpperCase(),TX,134,W-TX-P,50,'900','#ffffff',26);
+  if(md.opponent)drawFit(ctx,`TEGEN ${md.opponent.toUpperCase()}`,TX,190,W-TX-P,40,'900','#ffffff',22);
+  let y=300;
   const tiles=[['Datum',matchSheetShortDate(md.date)],['Aanvang',md.startTime],['Verzamelen',md.gatherTime]].filter(t=>t[1]);
-  y=300;
   if(tiles.length){
-    const gap=16,tw=(W-P*2-gap*(tiles.length-1))/tiles.length;
-    tiles.forEach(([label,value],i)=>{const x=P+i*(tw+gap),gather=label==='Verzamelen';roundRect(ctx,x,y-34,tw,112,16,gather?'#08643f':'#eef4f0');drawFit(ctx,label.toUpperCase(),x+20,y+4,tw-40,22,'700',gather?'#c8e8d6':MUTED,16);drawFit(ctx,value,x+20,y+58,tw-40,42,'900',gather?'#ffffff':DARK,24)});
-    y+=118;
+    rect(HX,y-34,W-HX-P,6,DARK);
+    const tw=(W-HX-P)/tiles.length;
+    tiles.forEach(([label,value],i)=>{const x=HX+i*tw,gather=label==='Verzamelen';
+      if(gather)rect(x,y-28,tw,112,GREEN);
+      else if(i)rect(x,y-28,3,112,LINE);
+      drawFit(ctx,label.toUpperCase(),x+(i?20:0),y+8,tw-40,20,'800',gather?'#ffffff':GREEN,14);
+      drawFit(ctx,value,x+(i?20:0),y+62,tw-40,42,'900',gather?'#ffffff':DARK,22)});
+    y+=84;rect(HX,y,W-HX-P,3,DARK);y+=36;
   }
   const line=[md.competition,md.homeAway].filter(Boolean).join(' · ');
-  if(line){drawFit(ctx,line,P,y+24,W-P*2,32,'700',DARK,20);y+=46}
-  if(md.venue){drawFit(ctx,`Locatie: ${md.venue}`,P,y+24,W-P*2,30,'600',MUTED,20);y+=46}
+  if(line){drawFit(ctx,line,HX,y+24,W-HX-P,32,'700',DARK,20);y+=46}
+  if(md.venue){drawFit(ctx,`Locatie: ${md.venue}`,HX,y+24,W-HX-P,30,'600',MUTED,20);y+=46}
   y+=14;
-  roundRect(ctx,P,y,W-P*2,60,12,GREEN);
-  drawFit(ctx,`SELECTIE · ${md.rows.length} spelers`,P+22,y+41,W-P*2-44,30,'800','#ffffff',20);
-  y+=76;
-  if(!md.rows.length){drawFit(ctx,'Nog geen wedstrijdselectie gekozen',P,y+40,W-P*2,30,'600',MUTED,20);y+=60}
+  rect(HX,y,W-HX-P,64,DARK);rect(HX,y,12,64,GREEN);
+  drawFit(ctx,`SELECTIE · ${md.rows.length} ${md.rows.length===1?'SPELER':'SPELERS'}`,HX+34,y+43,HW-60,30,'900','#ffffff',20);
+  y+=64;
+  if(!md.rows.length){drawFit(ctx,'Nog geen wedstrijdselectie gekozen',HX,y+50,HW,30,'600',MUTED,20);y+=70}
   else{
-    const twoCols=md.rows.length>9,per=twoCols?Math.ceil(md.rows.length/2):md.rows.length,colW=twoCols?(W-P*2-24)/2:W-P*2,rowH=twoCols?54:62;
+    const twoCols=md.rows.length>9,per=twoCols?Math.ceil(md.rows.length/2):md.rows.length,gapC=24,colW=twoCols?(HW-gapC)/2:HW,rowH=twoCols?54:62;
+    y+=8;
     md.rows.forEach((r,i)=>{
-      const c=twoCols?Math.floor(i/per):0,idx=twoCols?i%per:i,x=P+c*(colW+24),ry=y+idx*rowH;
-      roundRect(ctx,x,ry,colW,rowH-8,10,idx%2?'#f7faf8':'#eef4f0');
-      roundRect(ctx,x,ry,72,rowH-8,10,GREEN);
-      drawFit(ctx,r.number||'–',x+36,ry+(rowH-8)/2+12,60,34,'900','#ffffff',20,'center');
-      drawFit(ctx,r.name,x+88,ry+(rowH-8)/2+11,colW-100,32,'700',DARK,20);
+      const c=twoCols?Math.floor(i/per):0,idx=twoCols?i%per:i,x=HX+c*(colW+gapC),ry=y+idx*rowH,h=rowH-6;
+      if(idx%2===0)rect(x,ry,colW,h,'rgba(10,124,58,0.07)');
+      rect(x,ry+h,colW,2,LINE);
+      rect(x,ry,72,h,GREEN);
+      drawFit(ctx,r.number||'–',x+36,ry+h/2+12,60,34,'900','#ffffff',20,'center');
+      const nx=x+90,nw=colW-102;
+      if(r.firstName&&r.lastName){
+        ctx.font=`500 30px ${MATCH_IMAGE_FONT}`;const fw=ctx.measureText(r.firstName+' ').width;
+        ctx.font=`900 30px ${MATCH_IMAGE_HEAD}`;const lw=ctx.measureText(r.lastName.toUpperCase()).width;
+        if(fw+lw<=nw){drawFit(ctx,r.firstName,nx,ry+h/2+11,fw,30,'500',DARK,30);drawFit(ctx,r.lastName.toUpperCase(),nx+fw,ry+h/2+11,nw-fw,30,'900',DARK,30);return}
+      }
+      drawFit(ctx,r.name,nx,ry+h/2+11,nw,30,'700',DARK,18);
     });
-    y+=per*rowH+10;
+    y+=per*rowH+14;
   }
-  const cats=[['AFWEZIG',md.absent,'#8f2a1f','#fde7e4'],['GEBLESSEERD',md.injured,'#8a5200','#fff0d9'],['DOORGESCHOVEN NAAR HET EERSTE',md.promotedFirst,GREEN,'#e8f1ec'],['DOORGESCHOVEN NAAR EEN ANDER TEAM',md.promotedOther,GREEN,'#e8f1ec']];
-  cats.forEach(([title,list,fg,bg])=>{
+  const cats=[['AFWEZIG',md.absent,'#a32c20'],['GEBLESSEERD',md.injured,'#a35f00'],['DOORGESCHOVEN NAAR HET EERSTE',md.promotedFirst,GREEN],['DOORGESCHOVEN NAAR EEN ANDER TEAM',md.promotedOther,GREEN]];
+  cats.forEach(([title,list,fg])=>{
     if(!list.length)return;
-    roundRect(ctx,P,y,W-P*2,48,10,bg);
-    drawFit(ctx,`${title} (${list.length})`,P+20,y+33,W-P*2-40,26,'800',fg,16);y+=60;
-    list.forEach(it=>{drawFit(ctx,[it.name+(it.team?` (${it.team})`:''),it.note].filter(Boolean).join(' – '),P+20,y+26,W-P*2-40,30,'600',DARK,18);y+=42});
+    rect(HX,y,HW,6,fg);
+    drawFit(ctx,`${title} (${list.length})`,HX,y+42,HW,26,'900',fg,16);y+=60;
+    list.forEach(it=>{drawFit(ctx,[it.name+(it.team?` (${it.team})`:''),it.note].filter(Boolean).join(' – '),HX,y+26,HW,30,'600',DARK,18);y+=42});
     y+=10;
   });
-  md.practical.forEach(x=>{drawFit(ctx,`${x.label}: ${x.value}`,P,y+26,W-P*2,28,'600',DARK,18);y+=40});
-  if(md.instructions){drawFit(ctx,`Instructie: ${md.instructions.split('\n')[0]}`,P,y+26,W-P*2,28,'600',DARK,18);y+=40}
-  const end=y+20;
-  ctx.fillStyle=MUTED;ctx.textAlign='center';ctx.font=`600 22px ${MATCH_IMAGE_FONT}`;ctx.fillText('D.S.V. Full Speed · Delft',W/2,Math.max(H,end+40)-28);
+  md.practical.forEach(x=>{drawFit(ctx,`${x.label}: ${x.value}`,HX,y+26,HW,28,'600',DARK,18);y+=40});
+  if(md.instructions){drawFit(ctx,`Instructie: ${md.instructions.split('\n')[0]}`,HX,y+26,HW,28,'600',DARK,18);y+=40}
+  const end=y+20,fy=Math.max(H,end+40)-28;
+  rect(HX,fy-36,HW,6,GREEN);
+  ctx.fillStyle=GREEN;ctx.textAlign='left';ctx.font=`800 22px ${MATCH_IMAGE_FONT}`;ctx.fillText('D.S.V. FULL SPEED · DELFT',HX,fy);
   return end;
 }
 function loadImageElement(src){return new Promise(resolve=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>resolve(null);img.src=src})}

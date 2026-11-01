@@ -488,7 +488,7 @@ test('WhatsApp-afbeelding tekent nummers, namen, verzameltijd en afwezigen in 4:
   const {a,m}=sheetFixture(),texts=[],ctx=new Proxy({},{get:(t,k)=>k==='measureText'?(s=>({width:String(s).length*10})):k==='fillText'?((s)=>texts.push(String(s))):(typeof t[k]==='undefined'?(()=>{}):t[k]),set:(t,k,v)=>{t[k]=v;return true}});
   const end=a.t.drawMatchImage(ctx,a.t.matchSheetModel(m),1080,1350,null);
   assert.ok(end<1350);
-  ['Piet Keeper','Lars Visser','FC Test','13:30','AFWEZIG','GEBLESSEERD','Ben Weg – Werk'].forEach(x=>assert.ok(texts.some(t=>t.includes(x)),x));
+  ['Piet','KEEPER','Lars','VISSER','FC TEST','13:30','AFWEZIG','GEBLESSEERD','Ben Weg – Werk'].forEach(x=>assert.ok(texts.some(t=>t.includes(x)),x));
   assert.ok(texts.includes('17')&&texts.includes('1'));
 });
 test('PDF- en afbeeldingsexport lezen de actuele wedstrijd bij het klikken',()=>{
