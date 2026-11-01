@@ -6,6 +6,12 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 - `node --check app.js` — syntaxcontrole
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
 
+### Coach main 2.9.0 — wedstrijdblad, instroomdatum en meetrainers
+- Wedstrijdblad: één gegevensmodel (`matchSheetModel`) voedt de A4-PDF (`buildMatchSheetHtml`, vaste A4-pagina's, tweede pagina bij grote selectie) en de WhatsApp-afbeelding (`drawMatchImage`, PNG ±4:5, ook deelbaar via `navigator.share`). Beide exports worden bij het klikken opnieuw opgebouwd uit de actuele wedstrijd. Rugnummer en naam staan in aparte kolommen, de volgorde volgt het wedstrijdformulier; doorgeschoven (1e / ander team), geblesseerde en afwezige spelers staan in aparte onderdelen en komen nooit dubbel voor. Lege onderdelen worden verborgen.
+- Trainingsopkomst gebruikt de bestaande `startDate` ("Aangemeld sinds") van de speler; zonder datum geldt de volledige historie. Alleen trainingen van het huidige primaire team vanaf die datum tellen mee.
+- Meetrainers: "Speler toevoegen" zoekt spelers van andere teams (met teamnaam), meerdere tegelijk, zonder dubbelen; ze staan in `guestPlayers` van die ene training en raken de opkomst bij hun eigen team niet. Verwijderen haalt alleen de koppeling aan die training weg.
+- Trainingsgroepen per training: `groups` (`{id,name}`) en `groupAssign` (spelers-ID of `guest:<id>` → groep-ID), alleen optionele velden in de bestaande `trainings`-payload. Geen databasemigratie nodig: de Supabase-tabel `coach_data_auth` bewaart de payload ongewijzigd.
+
 ### Coach main 2.8.0 — speler-, training- en wedstrijdbeheer
 - Spelernamen worden als `firstName` en `lastName` opgeslagen; oude `name`-waarden worden tijdens normalisatie opgesplitst en blijven als volledige `name` beschikbaar voor bestaande weergaven. Een lege aanmelddatum bij een bestaande speler behoudt de historische meetperiode.
 - Trainingspercentages tellen relevante trainingen vanaf de aanmelddatum mee; sessies vóór de datum tellen niet mee. Meetrainers worden per training apart opgeslagen onder `guestPlayers`, met aanwezigheid via eigen gast-ID's, buiten de structurele spelerspercentages.

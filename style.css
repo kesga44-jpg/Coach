@@ -252,3 +252,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
   .player-quickfacts>div{padding:9px}
   .sheet-remark-row{grid-template-columns:1fr;gap:6px}
 }
+.sheet-export-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.sheet-export-actions .btn{flex:1 1 220px;padding:14px 16px;font-size:16px}
+.guest-picker{max-height:42vh;overflow:auto;margin-top:12px}.guest-temp{margin-top:12px}.guest-temp summary{cursor:pointer;font-weight:700}
+.training-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.training-group{border:1px solid var(--line,#d8e3dc);border-radius:14px;padding:12px}.training-group h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
+@media(max-width:560px){.sheet-export-actions .btn{flex-basis:100%}}

@@ -439,3 +439,135 @@ test('wedstrijdscherm toont status en wedstrijdnummer zonder standaardnummer te 
   assert.ok(!a.t.renderLineupBoard(m).includes('#23'));assert.ok(!a.t.matchSheetSelectedPlayers(m).some(x=>x.id===p.id));
   assert.notStrictEqual(p.number,'23');
 });
+
+/* ===== 2.9.0: wedstrijdblad, instroomdatum, meetrainers en trainingsgroepen ===== */
+const sheetFixture=()=>{
+  const a=createApp(),team=a.t.state.teams[0].id;
+  const mk=(id,first,last,number,primary=team)=>({id,firstName:first,lastName:last,name:`${first} ${last}`,number,primaryTeamId:primary,teamIds:[primary],active:true});
+  a.t.state.players=[mk('gk','Piet','Keeper','1'),mk('v1','Jan','van der Berg','4'),mk('v2','Kees','Ouwehand','5'),mk('guest','Lars','Visser','17','other-team'),mk('inj','Tom','Gewond','8'),mk('abs','Ben','Weg','9'),mk('p1','Eric','Eerste','10'),mk('p2','Sven','Tweede','11')];
+  const m={id:'m',teamId:team,date:'2026-11-07',opponent:'FC Test',competition:'Competitie',homeAway:'Thuis',startTime:'14:30',gatherTime:'13:30',venue:'Sportpark Delft',lineup:{GK:'gk',LB:'v1'},benchIds:['v2','guest'],formation:'4-3-3',
+    squadPlayerIds:['gk','v1','v2','guest','inj','abs','p1','p2'],promotedFirstIds:['p1'],promotedO232Ids:['p2'],availability:{inj:{status:'Geblesseerd',reason:'Enkel'},abs:{status:'Afwezig – andere reden',reason:'Werk'},p1:{status:'Geblesseerd',reason:'dubbel?'}},playerNumbers:{},sheetRemarks:{},checklist:{}};
+  a.t.state.matches=[m];return {a,m,team};
+};
+test('wedstrijdblad: rugnummer en naam gescheiden, selectievolgorde en spelers van ander team',()=>{
+  const {a,m}=sheetFixture(),md=a.t.matchSheetModel(m);
+  assert.deepStrictEqual(Array.from(md.rows.map(r=>r.name)),['Piet Keeper','Jan van der Berg','Kees Ouwehand','Lars Visser']);
+  assert.deepStrictEqual(Array.from(md.rows.map(r=>r.number)),['1','4','5','17']);
+  assert.ok(md.rows[3].fromTeam);assert.strictEqual(md.rows[0].fromTeam,'');
+  const html=a.t.buildMatchSheetHtml(m);
+  assert.ok(html.includes('<td class="num">17</td>'));assert.ok(html.includes('D.S.V. Full Speed'));assert.ok(html.includes('FC Test'));
+});
+test('wedstrijdblad: geen speler in meerdere categorieën en lege onderdelen verborgen',()=>{
+  const {a,m}=sheetFixture(),md=a.t.matchSheetModel(m),all=[...md.rows.map(r=>r.id),...md.promotedFirst,...md.promotedOther,...md.injured,...md.absent].map(x=>x.id||x);
+  assert.strictEqual(new Set(all).size,all.length);
+  assert.deepStrictEqual(Array.from(md.promotedFirst.map(x=>x.id)),['p1']);assert.deepStrictEqual(Array.from(md.promotedOther.map(x=>x.id)),['p2']);
+  assert.deepStrictEqual(Array.from(md.injured.map(x=>x.id)),['inj']);assert.strictEqual(md.injured[0].note,'Enkel');
+  assert.deepStrictEqual(Array.from(md.absent.map(x=>x.id)),['abs']);assert.strictEqual(md.absent[0].note,'Werk');
+  const html=a.t.buildMatchSheetHtml(m);
+  assert.ok(html.includes('Doorgeschoven naar het eerste elftal'));assert.ok(html.includes('Doorgeschoven naar een ander team'));
+  assert.ok(!html.includes('Tenue'));assert.ok(!html.includes('Kleedkamer'));assert.ok(!html.includes('Wedstrijdinstructies'));
+  m.kit='Groen';m.lockerRoom='3';m.sheetNote='Pressen';
+  const full=a.t.buildMatchSheetHtml(m);assert.ok(full.includes('Tenue')&&full.includes('Kleedkamer')&&full.includes('Pressen'));
+  m.promotedFirstIds=[];m.promotedO232Ids=[];m.availability={};
+  const empty=a.t.buildMatchSheetHtml(m);assert.ok(!empty.includes('Doorgeschoven naar'));assert.ok(!empty.includes('class="cat '));
+});
+test('wedstrijdblad: volledige selectie loopt over twee A4-pagina’s en export toont actuele data',()=>{
+  const {a,m,team}=sheetFixture();
+  const many=Array.from({length:30},(_,i)=>({id:'x'+i,firstName:'Speler',lastName:'N'+i,name:'Speler N'+i,number:String(20+i),primaryTeamId:team,teamIds:[team],active:true}));
+  a.t.state.players.push(...many);m.lineup={};m.benchIds=many.map(p=>p.id);
+  const pages=a.t.matchSheetPages(a.t.matchSheetModel(m));
+  assert.ok(pages.length>=2);assert.strictEqual(pages.reduce((n,p)=>n+p.rows.length,0),30);
+  assert.strictEqual((a.t.buildMatchSheetHtml(m).match(/<main class="sheet">/g)||[]).length,pages.length);
+  m.opponent='Nieuwe Tegenstander';assert.ok(a.t.buildMatchSheetHtml(m).includes('Nieuwe Tegenstander'));
+  m.benchIds=[];m.lineup={GK:'gk'};assert.strictEqual(a.t.matchSheetPages(a.t.matchSheetModel(m)).length,1);
+});
+test('WhatsApp-afbeelding tekent nummers, namen, verzameltijd en afwezigen in 4:5',()=>{
+  const {a,m}=sheetFixture(),texts=[],ctx=new Proxy({},{get:(t,k)=>k==='measureText'?(s=>({width:String(s).length*10})):k==='fillText'?((s)=>texts.push(String(s))):(typeof t[k]==='undefined'?(()=>{}):t[k]),set:(t,k,v)=>{t[k]=v;return true}});
+  const end=a.t.drawMatchImage(ctx,a.t.matchSheetModel(m),1080,1350,null);
+  assert.ok(end<1350);
+  ['Piet Keeper','Lars Visser','FC Test','13:30','AFWEZIG','GEBLESSEERD','Ben Weg – Werk'].forEach(x=>assert.ok(texts.some(t=>t.includes(x)),x));
+  assert.ok(texts.includes('17')&&texts.includes('1'));
+});
+test('PDF- en afbeeldingsexport lezen de actuele wedstrijd bij het klikken',()=>{
+  const {a,m}=sheetFixture(),opened=[];a.sandbox.window.open=()=>({document:{open(){},write:h=>opened.push(h),close(){}},focus(){}});
+  m.opponent='Alfa United';a.t.runSheetExport('pdf','m');m.opponent='Omega City';a.t.runSheetExport('pdf','m');
+  assert.ok(opened[0].includes('Alfa United')&&!opened[0].includes('Omega City'));assert.ok(opened[1].includes('Omega City'));
+  assert.ok(opened[1].includes('FC_PDF_FIXED_PAGES=true'));
+});
+test('instroomdatum: halverwege het seizoen telt alleen vanaf aanmelding (10 trainingen, 8 aanwezig = 80%)',()=>{
+  const a=createApp(),team=a.t.state.teams[0].id,att={};
+  const trainings=[];
+  for(let i=0;i<40;i++){const d=new Date(Date.UTC(2025,7,1+i*3)).toISOString().slice(0,10);trainings.push({id:'t'+i,teamId:team,date:d,attendance:{}})}
+  const since=trainings.slice(30);
+  a.t.state.players=[{id:'new',name:'Nieuw Lid',firstName:'Nieuw',lastName:'Lid',primaryTeamId:team,teamIds:[team],active:true,startDate:since[0].date},{id:'full',name:'Vol Seizoen',firstName:'Vol',lastName:'Seizoen',primaryTeamId:team,teamIds:[team],active:true,startDate:''}];
+  trainings.forEach((t,i)=>{t.attendance.full=i%4===0?'Afwezig':'Aanwezig';if(i>=30)t.attendance.new=i<38?'Aanwezig':'Afwezig'});
+  a.t.state.trainings=trainings;a.t.normalize();
+  const stats=a.t.attendanceStatsForTrainings('new',trainings);
+  assert.strictEqual(stats.relevant,10);assert.strictEqual(stats.present,8);assert.strictEqual(stats.pct,80);
+  const full=a.t.attendanceStatsForTrainings('full',trainings);
+  assert.strictEqual(full.relevant,40);assert.strictEqual(full.present,30);assert.strictEqual(full.pct,75);
+  a.t.state.players[1].startDate='';assert.strictEqual(a.t.attendanceStatsForTrainings('full',trainings).pct,75);
+});
+test('instroomdatum: spelers die van team wisselen tellen alleen trainingen van hun huidige team',()=>{
+  const a=createApp(),team=a.t.state.teams[0].id;
+  a.t.state.players=[{id:'w',name:'Wis Selaar',firstName:'Wis',lastName:'Selaar',primaryTeamId:team,teamIds:[team],active:true,startDate:'2026-03-01'}];
+  a.t.state.trainings=[{id:'o',teamId:'ander',date:'2026-02-01',attendance:{w:'Afwezig'}},{id:'b',teamId:team,date:'2026-02-15',attendance:{w:'Afwezig'}},{id:'n',teamId:team,date:'2026-03-02',attendance:{w:'Aanwezig'}}];
+  assert.strictEqual(a.t.attendanceStatsForTrainings('w',a.t.state.trainings).pct,100);
+});
+const trainingFixture=()=>{
+  const a=createApp(),team=a.t.state.teams[0].id;
+  const mk=(id,first,last,primary)=>({id,firstName:first,lastName:last,name:`${first} ${last}`,primaryTeamId:primary,teamIds:[primary],active:true});
+  a.t.state.players=[mk('own','Eigen','Speler',team),mk('o19','Jelle','Jong','o19'),mk('o232','Maas','Tweede','o232')];
+  a.t.state.teams.push({id:'o19',name:'Full Speed O19',shortName:'O19'},{id:'o232',name:'Full Speed O23-2',shortName:'O23-2'});
+  a.t.state.trainings=[{id:'t1',teamId:team,date:'2099-02-08',attendance:{},squadPlayerIds:[]},{id:'t2',teamId:team,date:'2026-02-01',attendance:{}}];
+  a.t.state.trainings[0].squadPlayerIds=['own'];a.t.normalize();return {a,team};
+};
+const runModal=(a,fn)=>{let save;a.t.setModal((title,body,s)=>{save=s;a.body=body});fn();return save};
+test('meetrainers: zoeken toont team, meerdere spelers tegelijk, geen duplicaten en eigen opkomst onveranderd',()=>{
+  const {a}=trainingFixture();
+  const save=runModal(a,()=>a.t.addTrainingGuest('t1'));
+  assert.ok(a.body.includes('Jelle Jong')&&a.body.includes('Full Speed O19'));assert.ok(!a.body.includes('Eigen Speler'));
+  a.domMap['input[name=guestPlayer]:checked']=[{value:'o19'},{value:'o232'},{value:'o19'}];
+  assert.strictEqual(save(),true);
+  const t=a.t.state.trainings[0];assert.strictEqual(t.guestPlayers.length,2);
+  assert.ok(t.guestPlayers.every(g=>g.playerId&&g.teamName));
+  assert.strictEqual(a.t.state.players.length,3);assert.strictEqual(a.t.state.players.find(p=>p.id==='o19').primaryTeamId,'o19');
+  runModal(a,()=>a.t.addTrainingGuest('t1'));assert.ok(!a.body.includes('Jelle Jong'));
+  t.attendance['guest:'+t.guestPlayers[0].id]='Aanwezig';
+  assert.strictEqual(a.t.attendanceStatsForTrainings('o19',a.t.state.trainings).pct,null);
+  assert.strictEqual(a.t.eventAttendanceCounts(t).total,3);
+  const html=a.t.renderAttendance();assert.ok(html.includes('Meetrainers (2)'));
+});
+test('meetrainer kan aan meerdere trainingen worden toegevoegd en weer verwijderd zonder profiel of andere trainingen te raken',()=>{
+  const {a}=trainingFixture();
+  a.domMap['input[name=guestPlayer]:checked']=[{value:'o19'}];
+  ['t1','t2'].forEach(id=>assert.strictEqual(runModal(a,()=>a.t.addTrainingGuest(id))(),true));
+  const [t1,t2]=a.t.state.trainings,g1=t1.guestPlayers[0].id;
+  t1.attendance['guest:'+g1]='Aanwezig';t2.attendance['guest:'+t2.guestPlayers[0].id]='Afwezig';
+  a.t.setConfirm(()=>true);a.t.removeTrainingGuest(g1);
+  assert.strictEqual(t1.guestPlayers.length,0);assert.strictEqual(t2.guestPlayers.length,1);
+  assert.strictEqual(t2.attendance['guest:'+t2.guestPlayers[0].id],'Afwezig');
+  assert.ok(a.t.state.players.some(p=>p.id==='o19'));
+});
+test('trainingsgroepen: indelen, verplaatsen en meetrainer in groep; groep verwijderen',()=>{
+  const {a}=trainingFixture(),t=a.t.state.trainings[0];
+  a.domMap['input[name=guestPlayer]:checked']=[{value:'o19'}];
+  runModal(a,()=>a.t.addTrainingGuest('t1'))();
+  const gkey='guest:'+t.guestPlayers[0].id;
+  let save=runModal(a,()=>a.t.editTrainingGroups('t1'));
+  a.domMap['[data-group-new]']=[{value:'Groep A'},{value:'Groep B'}];save();
+  assert.strictEqual(t.groups.length,2);const [ga,gb]=t.groups;
+  save=runModal(a,()=>a.t.editTrainingGroups('t1'));
+  a.domMap['[data-group-member]']=[{value:ga.id,dataset:{groupMember:'own'}},{value:ga.id,dataset:{groupMember:gkey}}];
+  a.domMap[`[data-group-name="${ga.id}"]`]={value:'Groep A'};a.domMap[`[data-group-name="${gb.id}"]`]={value:'Groep B'};a.domMap['[data-group-new]']=[{value:''}];
+  save();assert.strictEqual(t.groupAssign.own,ga.id);assert.strictEqual(t.groupAssign[gkey],ga.id);
+  save=runModal(a,()=>a.t.editTrainingGroups('t1'));
+  a.domMap['[data-group-member]']=[{value:gb.id,dataset:{groupMember:'own'}},{value:ga.id,dataset:{groupMember:gkey}}];save();
+  assert.strictEqual(t.groupAssign.own,gb.id);
+  assert.ok(a.t.renderTrainingDay().includes('Groep B'));
+  assert.ok(a.t.trainingMembers(t).find(x=>x.key===gkey).guest);
+  a.domMap[`[data-group-name="${gb.id}"]`]={value:''};
+  save=runModal(a,()=>a.t.editTrainingGroups('t1'));a.domMap['[data-group-member]']=[];a.domMap['[data-group-new]']=[];save();
+  assert.strictEqual(t.groups.length,1);assert.ok(!t.groupAssign.own);
+  a.t.removeTrainingGuest(t.guestPlayers[0].id);assert.ok(!t.groupAssign[gkey]);
+});
