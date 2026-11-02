@@ -78,6 +78,18 @@ test('validatie: lege items met no_update_note is toegestaan',()=>{
   const a=fixture(),r=a.t.kd.kdImport(json({items:[],no_update_note:'Geen nieuwe studies'}));
   assert.strictEqual(r.ok,true);assert.strictEqual(r.added,0);assert.strictEqual(a.t.kd.kdRead().store.updates.length,1);
 });
+test('import van meerdere artikelen: gedeeltelijk ongeldig bestand is atomair en behoudt bestaande artikelen',()=>{
+  const a=fixture();
+  const first=json({items:[{title:'Artikel A',source:'Bron A'},{title:'Artikel B',source:'Bron B'}]});
+  assert.strictEqual(a.t.kd.kdImport(first).added,2);
+  const before=a.ls.data[KD],v2=a.ls.data[V2];
+  const invalid=json({title:'Nieuwe week',update_date:'2026-10-08',items:[{title:'Artikel C',source:'Bron C'},{source:'mist titel'}]});
+  const result=a.t.kd.kdImport(invalid);
+  assert.strictEqual(result.ok,false);assert.strictEqual(a.ls.data[KD],before);
+  assert.strictEqual(a.ls.data[V2],v2);assert.strictEqual(a.t.kd.kdRead().store.items.length,2);
+  assert.strictEqual(a.t.kd.kdImport(json({title:'Week 2',update_date:'2026-10-08',items:[{title:'Artikel C',source:'Bron C'},{title:'Artikel D',source:'Bron D'}]})).added,2);
+  assert.strictEqual(a.t.kd.kdRead().store.items.length,4);
+});
 test('dubbelen: dezelfde update twee keer en hetzelfde artikel in andere update worden voorkomen',()=>{
   const a=fixture();assert.ok(a.t.kd.kdImport(json()).ok);
   const again=a.t.kd.kdImport(json());assert.strictEqual(again.ok,false);assert.match(again.errors.join(' '),/al eerder/);
@@ -113,6 +125,20 @@ test('aanpassen: wijzigt alleen dit artikel, behoudt onbekende velden, voorkomt 
   assert.strictEqual(a.t.kd.kdRead().store.items.length,1);assert.strictEqual(a.ls.data[V2],v2);
   assert.strictEqual(a.t.kd.kdDeleteUpdate(a.t.kd.kdRead().store.updates[0].id).ok,true);
   assert.strictEqual(a.t.kd.kdRead().store.items.length,0);assert.strictEqual(a.ls.data[V2],v2);
+});
+test('export-import: export bevat updates en onbekende velden; round-trip herstelt artikelen en duplicaten overslaan data niet',()=>{
+  const a=fixture(),aV2=a.ls.data[V2];assert.strictEqual(a.t.kd.kdImport(json({items:[{title:'Eerste',source:'Bron A',custom_field:{x:1}},{title:'Tweede',source:'Bron B'}]})).added,2);
+  const source=a.t.kd.kdRead().store,exported=a.t.kd.kdExportPayload(source),serialized=JSON.stringify(exported);
+  assert.strictEqual(exported.format,a.t.kd.KD_EXPORT_FORMAT);
+  const b=fixture(),v2=b.ls.data[V2],restored=b.t.kd.kdImport(serialized);
+  assert.strictEqual(restored.ok,true);assert.strictEqual(restored.added,2);
+  const roundTrip=b.t.kd.kdRead().store;
+  assert.strictEqual(roundTrip.items.length,2);assert.deepStrictEqual(roundTrip.items[0].raw.custom_field,{x:1});
+  assert.strictEqual(roundTrip.updates[0].root.weekly_team_advice,'Train 2x snelheid');
+  assert.strictEqual(b.ls.data[V2],v2);
+  const again=b.t.kd.kdImport(serialized);
+  assert.strictEqual(again.ok,true);assert.strictEqual(again.added,0);assert.strictEqual(b.t.kd.kdRead().store.items.length,2);
+  assert.strictEqual(a.ls.data[V2],aV2);assert.strictEqual(b.ls.data[V2],v2);
 });
 test('zoeken en categoriseren; weergave rendert en escapet HTML',()=>{
   const a=fixture();a.t.kd.kdImport(json({items:[{title:'Sprint <b>x</b>',source:'S',tags:['sprint']},{title:'Mentale weerbaarheid bij jeugd',source:'T',tags:['mentaal']}]}));

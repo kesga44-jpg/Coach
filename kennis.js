@@ -1,9 +1,10 @@
 /* Kennis & Ontwikkeling · zelfstandige, aanvullende module.
    Eigen opslagsleutel (KD_KEY). Raakt state, state.teams, save(), normalize(), validateStateData(),
-   back-ups en de Supabase-synchronisatie bewust NIET aan. Wordt na app.js geladen. */
+   back-ups en de Supabase-synchronisatie bewust NIET aan. Wordt vóór app.js geladen. */
 const KD_KEY='footballCoachKnowledgeV1';
 const KD_BACKUP_KEY='footballCoachKnowledgeBackupV1';
 const KD_RECORD_TYPE='football_knowledge_update';
+const KD_EXPORT_FORMAT='football_coach_knowledge_export_v1';
 const KD_REQUIRED=['schema_version','record_type','title','update_date','team_context','summary','items'];
 const KD_ROOT_KNOWN=[...KD_REQUIRED,'weekly_team_advice','next_training_action','no_update_note'];
 const KD_MAX_FILE=5*1024*1024;
@@ -101,6 +102,32 @@ function kdParse(rawText,store){
   let data;
   try{data=JSON.parse(text)}catch(e){out.errors.push('Ongeldige JSON: '+e.message);return out}
   if(!kdIsObj(data)){out.errors.push('De JSON moet een object zijn.');return out}
+  if(data.format===KD_EXPORT_FORMAT){
+    if(data.version!==1||!Array.isArray(data.updates)){out.errors.push('Ongeldige Kennis-export: versie of updates ontbreekt.');return out}
+    const simulated={items:[...(store.items||[])],updates:[...(store.updates||[])]},accepted=[];
+    for(let i=0;i<data.updates.length;i++){
+      const entry=data.updates[i];
+      if(!kdIsObj(entry)||!kdIsObj(entry.root)||!Array.isArray(entry.items)||entry.items.some(item=>!kdIsObj(item)||!kdIsObj(item.raw))){
+        out.errors.push(`Kennis-export update ${i+1} heeft een ongeldige structuur.`);continue;
+      }
+      const parsed=kdParse(JSON.stringify({...entry.root,items:entry.items.map(item=>item.raw)}),simulated);
+      if(parsed.errors.some(error=>!error.startsWith('Deze update is al eerder geïmporteerd'))){out.errors.push(...parsed.errors);continue}
+      if(parsed.duplicateUpdate){out.duplicates.push(...entry.items.map(item=>item.raw));continue}
+      const categorized=parsed.newItems.map(item=>{
+        const source=entry.items.find(candidate=>kdStable(candidate.raw)===kdStable(item.raw));
+        return {...item,category:KD_CATEGORIES.includes(source?.category)?source.category:item.category};
+      });
+      accepted.push({update:parsed.update,newItems:categorized});
+      categorized.forEach(item=>simulated.items.push({raw:item.raw}));
+      simulated.updates.push({fingerprint:parsed.update.fingerprint});
+      out.duplicates.push(...parsed.duplicates);
+      out.warnings.push(...parsed.warnings);
+    }
+    out.exportUpdates=accepted;
+    out.newItems=accepted.flatMap(entry=>entry.newItems);
+    out.ok=out.errors.length===0;
+    return out;
+  }
   const missing=KD_REQUIRED.filter(k=>data[k]===undefined||data[k]===null||(typeof data[k]==='string'&&!data[k].trim()));
   if(missing.length)out.errors.push('Verplichte velden ontbreken: '+missing.join(', '));
   if(data.record_type!==undefined&&data.record_type!==KD_RECORD_TYPE)out.errors.push(`record_type "${kdText(data.record_type)}" wordt niet ondersteund (verwacht: ${KD_RECORD_TYPE}).`);
@@ -136,10 +163,28 @@ function kdImport(rawText){
   if(cur.error)return {ok:false,errors:[cur.error]};
   const p=kdParse(rawText,cur.store);
   if(!p.ok)return {ok:false,errors:p.errors,duplicates:p.duplicates.length};
-  const now=new Date().toISOString(),updateId=uid('kdu'),added=p.newItems.map(n=>({id:uid('kdi'),updateId,category:n.category,raw:n.raw,createdAt:now,updatedAt:now}));
-  const r=kdCommit(s=>{s.updates.push({id:updateId,fingerprint:p.update.fingerprint,importedAt:now,root:p.update.root,itemIds:added.map(a=>a.id)});s.items.push(...added)});
+  const now=new Date().toISOString();
+  const entries=p.exportUpdates||[{update:p.update,newItems:p.newItems}];
+  const added=[],records=[];
+  let firstUpdateId=null;
+  entries.forEach(entry=>{
+    const updateId=uid('kdu'),items=entry.newItems.map(n=>({id:uid('kdi'),updateId,category:n.category,raw:n.raw,createdAt:now,updatedAt:now}));
+    firstUpdateId??=updateId;
+    added.push(...items);
+    records.push({id:updateId,fingerprint:entry.update.fingerprint,importedAt:now,root:entry.update.root,itemIds:items.map(item=>item.id)});
+  });
+  const r=kdCommit(s=>{
+    s.updates.push(...records);
+    s.items.push(...added);
+  });
   if(!r.ok)return {ok:false,errors:[r.error]};
-  return {ok:true,added:added.length,duplicates:p.duplicates.length,updateId};
+  return {ok:true,added:added.length,duplicates:p.duplicates.length,updateId:firstUpdateId};
+}
+function kdExportPayload(store){
+  return {format:KD_EXPORT_FORMAT,version:1,exportedAt:new Date().toISOString(),updates:store.updates.map(update=>({
+    root:update.root,
+    items:(update.itemIds||[]).map(id=>store.items.find(item=>item.id===id)).filter(Boolean).map(item=>({category:item.category,raw:item.raw}))
+  }))};
 }
 
 /* ---- Bewerken en verwijderen ---- */
@@ -253,7 +298,7 @@ function kdHandleClick(b){
   else if(a==='edit')kdEditItem(id);
   else if(a==='delete'){if(!confirm('Dit artikel verwijderen uit Kennis & Ontwikkeling? Andere gegevens blijven ongemoeid.'))return;const r=kdDeleteItem(id);u.message=r.ok?'Artikel verwijderd.':r.error;renderPage()}
   else if(a==='delete-update'){if(!confirm('Deze update en de bijbehorende artikelen verwijderen uit Kennis & Ontwikkeling? Andere gegevens blijven ongemoeid.'))return;const r=kdDeleteUpdate(id);u.message=r.ok?'Update verwijderd.':r.error;renderPage()}
-  else if(a==='export'){const c=kdRead();if(c.error)return toast(c.error);downloadJson(c.store,`kennis-ontwikkeling-${TODAY()}.json`)}
+  else if(a==='export'){const c=kdRead();if(c.error)return toast(c.error);downloadJson(kdExportPayload(c.store),`kennis-ontwikkeling-${TODAY()}.json`)}
 }
 document.addEventListener('change',async e=>{
   const t=e.target;
