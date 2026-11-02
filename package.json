@@ -1,1 +1,1 @@
-{"name":"football-coach","private":true,"scripts":{"check":"node --check app.js","test":"node --test app.test.js"}}
+{"name":"football-coach","private":true,"scripts":{"check":"node --check app.js && node --check kennis.js","test":"node --test app.test.js kennis.test.js"}}
