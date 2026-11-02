@@ -2,6 +2,7 @@ const test=require('node:test'),assert=require('node:assert');
 const {createApp}=require('./harness.js');
 const V2='footballCoachDataV2',V1='footballCoachDataV1';
 const starter=()=>JSON.parse(createApp().ls.data[V2]);
+const knowledgeUpdate=overrides=>JSON.stringify({schema_version:'1.0',record_type:'football_knowledge_update',title:'Kennisupdate pressing',update_date:'2026-10-30',team_context:'D.S.V. Full Speed O23 · 1-4-3-3 · verzorgd positiespel · hoge pressing · dinsdag, donderdag en zaterdag',summary:'Onderzoek naar pressing en herhaalde sprints.',items:[{title:'Pressing na balverlies',category:'Pressing en omschakeling',what_was_studied:'Herhaalde hoge-intensiteitsacties in kleine spelvormen.',key_findings:['Gerichte werk-rustblokken verhogen de herhaalde sprintbelasting.'],evidence_quality:'Matig bewijs; beperkte steekproef.',full_speed_application:'Gebruik korte pressingmomenten in een herkenbare 4-3-3.',training_goal:'Samen hoog drukzetten na een slechte aanname.',training_form:{name:'4v4+3 pressing',players:'11',field_size:'32 x 24 m',organization:'Twee teams spelen met drie kaatsers.',duration_minutes:15,work_rest_ratio:'3 x 4 min / 2 min rust',game_rules:'Na balverlies direct vijf seconden drukzetten.',coaching_points:['Eerste speler stuurt naar buiten.'],regression:'Ruimer veld.',progression:'Minder tijd om te heroveren.'},sources:['Auteur et al. (2025), DOI:10.0000/example'] }],weekly_team_advice:'Dinsdag: korte pressingblokken.',next_training_action:'Train de druktrigger op een slechte aanname.',no_update_note:'',...overrides});
 
 test('lokale opslag slaagt en schrijft V2',()=>{
   const a=createApp();a.t.state.team.name='Testteam';
@@ -37,6 +38,81 @@ test('validatie weigert dubbele id\'s en ongeldige structuur',()=>{
   const d=starter();d.players.push({...d.players[0]});
   assert.throws(()=>createApp().t.validateStateData(d),/Dubbel ID/);
   assert.throws(()=>createApp().t.validateStateData([]),/JSON-object/);
+});
+test('kennisupdate valideert schema en verwerpt ongeldige JSON, versie, recordtype en ontbrekende velden',()=>{
+  const a=createApp();
+  assert.strictEqual(a.t.parseKnowledgeImport(knowledgeUpdate()).items.length,1);
+  assert.throws(()=>a.t.parseKnowledgeImport('{kapot'),/Ongeldige JSON/);
+  assert.throws(()=>a.t.parseKnowledgeImport(knowledgeUpdate({schema_version:'2.0'})),/wordt niet ondersteund/);
+  assert.throws(()=>a.t.parseKnowledgeImport(knowledgeUpdate({record_type:'other'})),/[Rr]ecord type/);
+  assert.throws(()=>a.t.parseKnowledgeImport(knowledgeUpdate({update_date:'2026-02-31'})),/geldige datum/);
+  const missing=JSON.parse(knowledgeUpdate());delete missing.next_training_action;
+  assert.throws(()=>a.t.parseKnowledgeImport(JSON.stringify(missing)),/next_training_action/);
+});
+test('kennisupdate weigert lege onderzoeksitems en accepteert meerdere artikelen',()=>{
+  const a=createApp();
+  assert.throws(()=>a.t.parseKnowledgeImport(knowledgeUpdate({items:[]})),/minimaal één/);
+  assert.throws(()=>a.t.parseKnowledgeImport(knowledgeUpdate({items:[{}]})),/geen titel of onderzoeksinformatie/);
+  const parsed=a.t.parseKnowledgeImport(knowledgeUpdate({items:[{title:'Onderzoek A',findings:'Inzicht A'},{title:'Onderzoek B',summary:'Inzicht B'}]}));
+  assert.strictEqual(parsed.items.length,2);
+});
+test('onbekende categorie wordt Overig en oorspronkelijke categorie/bron blijven bewaard',()=>{
+  const a=createApp(),update=a.t.parseKnowledgeImport(knowledgeUpdate({items:[{title:'Nieuw onderwerp',category:'Onbekende categorie',findings:'Een bevinding',source:'Bron A'}]}));
+  assert.strictEqual(update.items[0].category,'Overig');
+  assert.strictEqual(update.items[0].sourceCategory,'Onbekende categorie');
+  assert.strictEqual(update.items[0].source,'Bron A');
+  assert.strictEqual(update.items[0].originalItem.source,'Bron A');
+});
+test('import bewaart oorspronkelijke JSON, categoriseert automatisch en voegt oefenvorm met velden en bron toe',()=>{
+  const a=createApp(),raw=knowledgeUpdate(),result=a.t.importKnowledgeUpdate(raw);
+  assert.ok(result.ok);assert.strictEqual(result.counts.research,1);assert.strictEqual(result.counts.insights,1);assert.strictEqual(result.counts.exercises,1);
+  const item=result.update.items[0],exercise=a.t.state.exercises.find(x=>x.source?.knowledgeItemId===item.id);
+  assert.strictEqual(item.category,'Pressing en omschakeling');
+  assert.strictEqual(result.update.originalJson,raw);
+  assert.strictEqual(exercise.players,'11');assert.strictEqual(exercise.size,'32 x 24 m');
+  assert.strictEqual(exercise.workRest,'3 x 4 min / 2 min rust');
+  assert.strictEqual(exercise.rules,'Na balverlies direct vijf seconden drukzetten.');
+  assert.strictEqual(exercise.coachPoints[0],'Eerste speler stuurt naar buiten.');
+  assert.ok(exercise.source.citation.includes('DOI'));
+  assert.ok(JSON.parse(a.ls.data[V2]).knowledgeUpdates[0].originalJson===raw);
+});
+test('import met meerdere onderzoeken rapporteert aantallen en ondersteunt oefening opslaan zonder dubbele oefenvorm',()=>{
+  const a=createApp(),raw=knowledgeUpdate({items:[{title:'Inzicht één',findings:'Bevinding één',training_form:{name:'Vorm één',organization:'Vier tegen vier.'}},{title:'Inzicht twee',findings:'Bevinding twee'}]});
+  const result=a.t.importKnowledgeUpdate(raw);
+  assert.ok(result.ok);assert.strictEqual(result.counts.research,2);assert.strictEqual(result.counts.insights,2);assert.strictEqual(result.counts.exercises,1);
+  const item=result.update.items[1],before=a.t.state.exercises.length;
+  a.t.saveResearchExercise(result.update.id,item.id);
+  assert.strictEqual(a.t.state.exercises.length,before+1);
+  a.t.saveResearchExercise(result.update.id,item.id);
+  assert.strictEqual(a.t.state.exercises.length,before+1);
+});
+test('dubbele import wordt geblokkeerd en kennis/oplossingen blijven staan na reload en sync-payload rondreis',async()=>{
+  const a=createApp(),raw=knowledgeUpdate(),first=a.t.importKnowledgeUpdate(raw);
+  const duplicate=a.t.importKnowledgeUpdate(JSON.stringify(JSON.parse(raw),null,2));
+  assert.ok(first.ok);assert.ok(duplicate.duplicate);assert.strictEqual(a.t.state.knowledgeUpdates.length,1);
+  const synced=await a.t.decryptData(await a.t.encryptData(a.t.normalizedStateCopy(a.t.state),'gedeelde sleutel'),'gedeelde sleutel');
+  const reloaded=createApp({store:{[V2]:JSON.stringify(synced)}});
+  assert.strictEqual(reloaded.t.state.knowledgeUpdates[0].items[0].title,'Pressing na balverlies');
+  assert.ok(reloaded.t.state.exercises.some(x=>x.source?.type==='knowledge-update'));
+  const remote=createApp();remote.t.persistRemoteCopy(synced);
+  assert.strictEqual(remote.t.state.knowledgeUpdates.length,1);
+});
+test('import bij mislukte lokale opslag rolt kennis en voorgestelde oefening terug',()=>{
+  const a=createApp(),before=a.t.state.exercises.length;
+  a.ls.failWrites=true;
+  const result=a.t.importKnowledgeUpdate(knowledgeUpdate());
+  assert.ok(!result.ok&&/teruggedraaid/.test(result.error));
+  assert.strictEqual(a.t.state.knowledgeUpdates.length,0);
+  assert.strictEqual(a.t.state.exercises.length,before);
+});
+test('kennis & ontwikkeling rendert vier onderdelen en filtert onderzoek op categorie en datum',()=>{
+  const vm=require('vm'),a=createApp(),r=code=>vm.runInContext(code,a.sandbox);
+  a.t.importKnowledgeUpdate(knowledgeUpdate());
+  const html=r("ui.page='knowledge';ui.knowledgeSection='research';renderKnowledge()");
+  for(const name of ['Onderzoeksbibliotheek','Trainingsmethodiek','Praktijkvertaling','Trainingsadviezen'])assert.ok(html.includes(name));
+  assert.ok(html.includes('Pressing na balverlies'));
+  assert.ok(r("ui.knowledgeCategory='Herstel';renderResearchList('research')").includes('Nog geen onderzoeksitems'));
+  assert.ok(r("ui.knowledgeCategory='';ui.knowledgeDate='2026-10-29';renderResearchList('research')").includes('Nog geen onderzoeksitems'));
 });
 test('herstelpunt wordt bewaard bij overnemen van clouddata; falende opslag wijzigt state niet',()=>{
   const a=createApp(),remote=starter();remote.team.name='Cloud';

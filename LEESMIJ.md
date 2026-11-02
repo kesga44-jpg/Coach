@@ -6,6 +6,14 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 - `node --check app.js` — syntaxcontrole
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
 
+### Kennis & Ontwikkeling — JSON-import
+- Open de module via **Meer → Kennis & Ontwikkeling**. De onderdelen Onderzoeksbibliotheek, Trainingsmethodiek, Praktijkvertaling en Trainingsadviezen gebruiken filters op zoekterm, categorie en datum.
+- **＋ Importeren** accepteert geplakte JSON en `.json`-bestanden met `schema_version: "1.0"` en `record_type: "football_knowledge_update"`. De verplichte updatevelden zijn `schema_version`, `record_type`, `title`, `update_date`, `team_context`, `summary`, `items`, `weekly_team_advice`, `next_training_action` en `no_update_note`. `items` bevat onderzoeksobjecten met onder meer titel, bevindingen, bewijssterkte, bron en optionele `training_form`.
+- De import controleert de structuur en toont categorie, datum, artikeltelling en oefenvormen vóór opslaan. Onbekende categorieën vallen terug op **Overig**; oorspronkelijke itemgegevens, bronvermelding en volledige JSON blijven behouden. Dezelfde JSON wordt niet opnieuw geïmporteerd.
+- Kennisitems en gekoppelde oefenvormen staan in de bestaande `footballCoachDataV2`-state. Daardoor vallen ze onder dezelfde lokale opslag, back-up, undo en versleutelde `coach_data_auth`-sync per account; er is geen aparte database of schemawijziging.
+- Oefenvormen met structuurvelden worden bij import aan de bestaande oefeningenbibliotheek toegevoegd. Andere items kunnen via **Oefening opslaan** worden toegevoegd, met bronkoppeling en duplicaatbescherming; organisatie, duur, werk-rust, regels, coachingpunten, progressie en regressie blijven bewaard.
+- De automatische testset controleert importvalidatie, lege en meervoudige items, onbekende categorieën, duplicaten, lokale opslag, encryptie-/sync-payload en de oefeningenbibliotheekkoppeling. Een echte Supabase-account-/apparaatsynchronisatie en fysieke iPhone/iPad-controle vereisen handmatige verificatie.
+
 ### Coach main 2.9.1 — wedstrijdblad altijd één A4-pagina
 - Het A4-PDF past het volledige wedstrijdblad, inclusief selectie en overige categorieën, automatisch op één staande pagina. Bij meer inhoud wordt de bladinhoud proportioneel verkleind in plaats van naar een tweede pagina te lopen of informatie af te breken. De WhatsApp-afbeelding blijft een verticale PNG van circa 4:5.
 - Beide exports gebruiken hetzelfde gegevensmodel (`matchSheetModel`) en worden bij het klikken opnieuw opgebouwd uit de actuele wedstrijd. Rugnummer en naam staan in aparte kolommen, de volgorde volgt het wedstrijdformulier; doorgeschoven (1e / ander team), geblesseerde en afwezige spelers staan in aparte onderdelen en komen nooit dubbel voor. Lege onderdelen worden verborgen.
