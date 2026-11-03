@@ -67,3 +67,6 @@ Legenda: ✅ bestaat · 🟡 gedeeltelijk · ⬜ nog te bouwen
 **Nog open**
 - Echte VC2-PDF's en .fckb's indexeren en zoekresultaten/paginanummers controleren; categorie-/trainingsdoel-/spelprincipe-filters ontbreken omdat die metadata niet in de index staat.
 - Supabase: URL/key, tabel `coach_data_auth`, RLS, bucket `vc2` en map `VC2` verifiëren zodra netwerk beschikbaar is.
+
+## Kennis & Ontwikkeling (Meer → Kennis & Ontwikkeling)
+Zelfstandige module in `kennis.js`. Opslag in een eigen localStorage-sleutel `footballCoachKnowledgeV1` (met laatste-versie-kopie in `footballCoachKnowledgeBackupV1`). `state`, `state.teams`, `save()`, `normalize()`, `validateStateData()`, back-up/herstel en Supabase-sync zijn niet gewijzigd. Let op: kennis wordt daarom **niet** meegenomen in de bestaande back-up of cloud-sync; gebruik "Kennis exporteren" in de module voor een eigen back-up. Tests: `npm test` (`kennis.test.js`).
