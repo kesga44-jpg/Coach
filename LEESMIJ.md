@@ -5,6 +5,7 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 ## Ontwikkelen en testen
 - `node --check app.js` — syntaxcontrole
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
+- CI: `.github/workflows/tests.yml` draait `npm run check` en `npm test` (Node.js 22, Ubuntu 24.04) bij elke pull request en push naar `main`. Alleen leesrechten, geen secrets, geen Supabase-verbinding.
 
 ### Coach main 2.9.1 — wedstrijdblad altijd één A4-pagina
 - Het A4-PDF past het volledige wedstrijdblad, inclusief selectie en overige categorieën, automatisch op één staande pagina. Bij meer inhoud wordt de bladinhoud proportioneel verkleind in plaats van naar een tweede pagina te lopen of informatie af te breken. De WhatsApp-afbeelding blijft een verticale PNG van circa 4:5.

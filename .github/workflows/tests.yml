@@ -1,0 +1,39 @@
+# Draait de bestaande syntaxcontrole en testsuite bij elke pull request en push naar main.
+# Alleen lezen: geen deploy, geen secrets, geen verbinding met Supabase.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: npm run check + npm test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Syntaxcontrole
+        run: npm run check
+
+      - name: Tests uitvoeren
+        run: npm test
