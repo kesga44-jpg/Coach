@@ -1,0 +1,413 @@
+From db389712a6ac7cfff4066af4e52b0b5187134235 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:25:56 +0100
+Subject: [PATCH 5/9] Supabase: referentieschema coach_data_auth, voorstel
+ coach-knowledge alleen-eigenaar (niet uitgevoerd), alleen-lezen
+ verificatiescript en lokale RLS-/Storage-tests
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ .env.example                                  | 11 ++++
+ ...02_coach_knowledge_owner_only.rollback.sql |  7 +++
+ .../0002_coach_knowledge_owner_only.sql       | 27 ++++++++
+ .../0001_coach_data_auth.rollback.sql         |  5 ++
+ supabase/reference/0001_coach_data_auth.sql   | 56 +++++++++++++++++
+ supabase/tests/00_supabase_stub.sql           | 25 ++++++++
+ supabase/tests/10_coach_data_auth.test.sql    | 61 +++++++++++++++++++
+ supabase/tests/20_storage_current.test.sql    | 19 ++++++
+ supabase/tests/30_storage_proposal.test.sql   | 34 +++++++++++
+ supabase/tests/run-local.sh                   | 28 +++++++++
+ supabase/verify/verify-production.sql         | 37 +++++++++++
+ 11 files changed, 310 insertions(+)
+ create mode 100644 .env.example
+ create mode 100644 supabase/proposals/0002_coach_knowledge_owner_only.rollback.sql
+ create mode 100644 supabase/proposals/0002_coach_knowledge_owner_only.sql
+ create mode 100644 supabase/reference/0001_coach_data_auth.rollback.sql
+ create mode 100644 supabase/reference/0001_coach_data_auth.sql
+ create mode 100644 supabase/tests/00_supabase_stub.sql
+ create mode 100644 supabase/tests/10_coach_data_auth.test.sql
+ create mode 100644 supabase/tests/20_storage_current.test.sql
+ create mode 100644 supabase/tests/30_storage_proposal.test.sql
+ create mode 100755 supabase/tests/run-local.sh
+ create mode 100644 supabase/verify/verify-production.sql
+
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..b20d84b
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,11 @@
++# Coach heeft GEEN omgevingsvariabelen nodig om te draaien: het is een statische app zonder buildstap.
++# De Supabase-projecturl en de PUBLISHABLE key staan bewust bovenin app.js (SYNC_PROJECT_URL, SYNC_PUBLIC_KEY);
++# een publishable key is bedoeld voor browsercode en is geen geheim. Zet hier NOOIT een service_role/secret key.
++#
++# Alleen voor optionele lokale hulpscripts:
++# Poort voor de tijdelijke PostgreSQL-testcluster (npm run test:db)
++PGPORT_TEST=54329
++# Map met PostgreSQL-binaries als die niet automatisch gevonden wordt
++# PGBIN=/usr/lib/postgresql/16/bin
++# Poort voor de lokale webserver van de Chromium-test (npm run test:e2e)
++E2E_PORT=8765
+diff --git a/supabase/proposals/0002_coach_knowledge_owner_only.rollback.sql b/supabase/proposals/0002_coach_knowledge_owner_only.rollback.sql
+new file mode 100644
+index 0000000..f8bd610
+--- /dev/null
++++ b/supabase/proposals/0002_coach_knowledge_owner_only.rollback.sql
+@@ -0,0 +1,7 @@
++-- Rollback van voorstel 0002: zet de policies terug zoals de app ze in 2.9.1 voorschreef (anon lezen/schrijven).
++drop policy if exists "coach knowledge owner read"   on storage.objects;
++drop policy if exists "coach knowledge owner insert" on storage.objects;
++drop policy if exists "coach knowledge owner update" on storage.objects;
++create policy "coach knowledge read" on storage.objects for select to anon using (bucket_id='coach-knowledge');
++create policy "coach knowledge insert" on storage.objects for insert to anon with check (bucket_id='coach-knowledge');
++create policy "coach knowledge update" on storage.objects for update to anon using (bucket_id='coach-knowledge') with check (bucket_id='coach-knowledge');
+diff --git a/supabase/proposals/0002_coach_knowledge_owner_only.sql b/supabase/proposals/0002_coach_knowledge_owner_only.sql
+new file mode 100644
+index 0000000..8107213
+--- /dev/null
++++ b/supabase/proposals/0002_coach_knowledge_owner_only.sql
+@@ -0,0 +1,27 @@
++-- VOORSTEL — bucket coach-knowledge alleen voor de ingelogde eigenaar (R8 / PR-10).
++-- Status: NIET uitgevoerd. Vereist eerst: akkoord eigenaar, PR-9 (backend geverifieerd), PR-3 (back-up opslag)
++-- en een app-wijziging (PR-10) die uploadt naar <auth.uid()>/<id>.fckb met het access token i.p.v. de publieke sleutel.
++-- Zonder die app-wijziging breekt dit het koppelen/openen van kennisbankoriginelen in de huidige app.
++--
++-- Huidige situatie volgens de SQL die de app zelf toont (app.js knowledgeStorageSql):
++--   anon mag SELECT, INSERT en UPDATE op ALLE objecten in de bucket. Daarmee kan iedereen met de publishable key
++--   de objectnamen opvragen (list), versleutelde bestanden downloaden en bestaande bestanden overschrijven (x-upsert).
++--   Of productie exact zo is ingericht is NIET geverifieerd.
++--
++-- Bestaande bestanden staan in <sha256(namespace:secret)>/<id>.fckb. Die worden door dit voorstel NIET verplaatst
++-- of verwijderd; een overgangsscript (kopiëren naar <uid>/…, pas na controle oude map opruimen) hoort bij PR-10.
++
++update storage.buckets set public = false where id = 'coach-knowledge';
++
++drop policy if exists "coach knowledge read"   on storage.objects;
++drop policy if exists "coach knowledge insert" on storage.objects;
++drop policy if exists "coach knowledge update" on storage.objects;
++
++create policy "coach knowledge owner read" on storage.objects for select to authenticated
++  using (bucket_id = 'coach-knowledge' and (storage.foldername(name))[1] = (select auth.uid())::text);
++create policy "coach knowledge owner insert" on storage.objects for insert to authenticated
++  with check (bucket_id = 'coach-knowledge' and (storage.foldername(name))[1] = (select auth.uid())::text);
++create policy "coach knowledge owner update" on storage.objects for update to authenticated
++  using (bucket_id = 'coach-knowledge' and (storage.foldername(name))[1] = (select auth.uid())::text)
++  with check (bucket_id = 'coach-knowledge' and (storage.foldername(name))[1] = (select auth.uid())::text);
++-- Bewust GEEN delete-policy: verwijderen gebeurt alleen bewust via het dashboard.
+diff --git a/supabase/reference/0001_coach_data_auth.rollback.sql b/supabase/reference/0001_coach_data_auth.rollback.sql
+new file mode 100644
+index 0000000..2464b21
+--- /dev/null
++++ b/supabase/reference/0001_coach_data_auth.rollback.sql
+@@ -0,0 +1,5 @@
++-- Rollback van de AANVULLINGEN uit 0001 (trigger en grootte-check). Tabel, gegevens en policies blijven bestaan:
++-- die horen bij de bestaande productieconfiguratie en worden nooit door een rollback verwijderd.
++drop trigger if exists coach_data_auth_guard on public.coach_data_auth;
++drop function if exists public.coach_data_auth_guard();
++alter table public.coach_data_auth drop constraint if exists coach_data_auth_payload_size;
+diff --git a/supabase/reference/0001_coach_data_auth.sql b/supabase/reference/0001_coach_data_auth.sql
+new file mode 100644
+index 0000000..c62f1f7
+--- /dev/null
++++ b/supabase/reference/0001_coach_data_auth.sql
+@@ -0,0 +1,56 @@
++-- REFERENTIE — coach_data_auth zoals Coach (app.js) die verwacht en LEESMIJ.md hem beschrijft.
++-- Status: NIET uitgevoerd op productie (project ckodnfshelblddfypmmv). Of productie hiermee overeenkomt is
++-- NIET geverifieerd. Gebruik verify/verify-production.sql (alleen lezen) om te vergelijken.
++-- Deel A (tabel, RLS, rechten, 3 policies) = de gedocumenteerde bestaande configuratie.
++-- Deel B (trigger en grootte-check onderaan) = AANVULLING/voorstel, bestaat waarschijnlijk niet in productie.
++-- Idempotent en additief: maakt niets kapot als de tabel al bestaat, verwijdert geen gegevens.
++-- Uitvoeren op productie alleen na expliciet akkoord, verse back-up en hersteltest (ADR 0010, ADR 0011).
++
++create table if not exists public.coach_data_auth (
++  user_id    uuid        not null references auth.users(id) on delete cascade,
++  id         text        not null,
++  payload    jsonb       not null,
++  updated_at timestamptz not null default now(),
++  primary key (user_id, id)
++);
++
++alter table public.coach_data_auth enable row level security;
++
++-- Minimale rechten: anon niets; authenticated alleen SELECT/INSERT/UPDATE (geen DELETE, geen TRUNCATE).
++revoke all on table public.coach_data_auth from anon, authenticated;
++grant select, insert, update on table public.coach_data_auth to authenticated;
++
++do $$
++begin
++  if not exists (select 1 from pg_policies where schemaname='public' and tablename='coach_data_auth' and policyname='coach_data_auth_select_own') then
++    create policy coach_data_auth_select_own on public.coach_data_auth for select to authenticated using (user_id = (select auth.uid()));
++  end if;
++  if not exists (select 1 from pg_policies where schemaname='public' and tablename='coach_data_auth' and policyname='coach_data_auth_insert_own') then
++    create policy coach_data_auth_insert_own on public.coach_data_auth for insert to authenticated with check (user_id = (select auth.uid()));
++  end if;
++  if not exists (select 1 from pg_policies where schemaname='public' and tablename='coach_data_auth' and policyname='coach_data_auth_update_own') then
++    create policy coach_data_auth_update_own on public.coach_data_auth for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
++  end if;
++end $$;
++
++-- ===== Deel B: aanvullingen (voorstel) =====
++-- Voorkomt dat een rij via UPDATE naar een andere eigenaar of rij-id wordt verplaatst.
++create or replace function public.coach_data_auth_guard() returns trigger
++language plpgsql set search_path = '' as $$
++begin
++  if new.user_id is distinct from old.user_id or new.id is distinct from old.id then
++    raise exception 'user_id en id zijn onveranderlijk';
++  end if;
++  return new;
++end $$;
++revoke execute on function public.coach_data_auth_guard() from public, anon, authenticated;
++drop trigger if exists coach_data_auth_guard on public.coach_data_auth;
++create trigger coach_data_auth_guard before update on public.coach_data_auth for each row execute function public.coach_data_auth_guard();
++
++-- Grootte begrenzen (versleutelde payload; localStorage is in de praktijk ~5 MB). Voorkomt misbruik als opslagruimte.
++do $$
++begin
++  if not exists (select 1 from pg_constraint where conname='coach_data_auth_payload_size') then
++    alter table public.coach_data_auth add constraint coach_data_auth_payload_size check (pg_column_size(payload) <= 10485760) not valid;
++  end if;
++end $$;
+diff --git a/supabase/tests/00_supabase_stub.sql b/supabase/tests/00_supabase_stub.sql
+new file mode 100644
+index 0000000..dcc5a4f
+--- /dev/null
++++ b/supabase/tests/00_supabase_stub.sql
+@@ -0,0 +1,25 @@
++-- Minimale nabootsing van de Supabase-omgeving voor LOKALE tests (geen echte Supabase).
++-- Rollen anon/authenticated, auth.users, auth.uid() via request.jwt.claim.sub, storage.buckets/objects en storage.foldername.
++do $$ begin
++  if not exists (select 1 from pg_roles where rolname='anon') then create role anon nologin; end if;
++  if not exists (select 1 from pg_roles where rolname='authenticated') then create role authenticated nologin; end if;
++end $$;
++create schema if not exists auth;
++create table if not exists auth.users(id uuid primary key);
++create or replace function auth.uid() returns uuid language sql stable as $$
++  select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
++grant usage on schema auth to anon, authenticated;
++grant execute on function auth.uid() to anon, authenticated;
++grant usage on schema public to anon, authenticated;
++
++create schema if not exists storage;
++create table if not exists storage.buckets(id text primary key, name text, public boolean default false, file_size_limit bigint, allowed_mime_types text[]);
++create table if not exists storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text references storage.buckets(id), name text not null, owner uuid, metadata jsonb, unique(bucket_id,name));
++create or replace function storage.foldername(name text) returns text[] language sql immutable as $$
++  select (string_to_array(name,'/'))[1:array_length(string_to_array(name,'/'),1)-1] $$;
++alter table storage.objects enable row level security;
++grant usage on schema storage to anon, authenticated;
++grant select, insert, update on storage.objects to anon, authenticated;  -- zoals Supabase: rechten via RLS-policies
++grant execute on function storage.foldername(text) to anon, authenticated;
++insert into storage.buckets(id,name,public) values ('coach-knowledge','coach-knowledge',false) on conflict do nothing;
++insert into auth.users values ('11111111-1111-1111-1111-111111111111'),('22222222-2222-2222-2222-222222222222') on conflict do nothing;
+diff --git a/supabase/tests/10_coach_data_auth.test.sql b/supabase/tests/10_coach_data_auth.test.sql
+new file mode 100644
+index 0000000..8705699
+--- /dev/null
++++ b/supabase/tests/10_coach_data_auth.test.sql
+@@ -0,0 +1,61 @@
++-- RLS-tests coach_data_auth: eigenaar mag, ander niet, anon niets. Faalt met een exception bij een fout.
++\set ON_ERROR_STOP on
++create or replace function pg_temp.as_user(u text) returns void language plpgsql as $$
++begin
++  if u is null then perform set_config('role','anon',true); perform set_config('request.jwt.claim.sub','',true);
++  else perform set_config('role','authenticated',true); perform set_config('request.jwt.claim.sub',u,true); end if;
++end $$;
++
++begin;
++select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
++insert into public.coach_data_auth(user_id,id,payload) values ('11111111-1111-1111-1111-111111111111','football-coach-v2','{"v":1}');
++do $$ begin
++  if (select count(*) from public.coach_data_auth)<>1 then raise exception 'FOUT: eigenaar ziet eigen rij niet'; end if;
++  begin
++    insert into public.coach_data_auth(user_id,id,payload) values ('22222222-2222-2222-2222-222222222222','football-coach-v2','{}');
++    raise exception 'FOUT: insert voor ander account toegestaan';
++  exception when insufficient_privilege then null; end;
++  begin delete from public.coach_data_auth; raise exception 'FOUT: delete toegestaan';
++  exception when insufficient_privilege then null; end;
++  begin update public.coach_data_auth set user_id='22222222-2222-2222-2222-222222222222';
++    raise exception 'FOUT: eigenaar wijzigen toegestaan';
++  exception when insufficient_privilege or raise_exception then
++    if sqlerrm like 'FOUT:%' then raise; end if; end;
++end $$;
++commit;
++
++begin;
++select pg_temp.as_user('22222222-2222-2222-2222-222222222222');
++do $$ begin
++  if (select count(*) from public.coach_data_auth)<>0 then raise exception 'FOUT: ander account ziet rij van eigenaar'; end if;
++  update public.coach_data_auth set payload='{"x":1}';
++end $$;
++commit;
++select count(*) filter (where payload='{"x":1}') = 0 as ander_kon_niet_wijzigen from public.coach_data_auth \gset
++\if :ander_kon_niet_wijzigen
++\else
++  \echo 'FOUT: ander account kon rij wijzigen' \q
++\endif
++
++begin;
++select pg_temp.as_user(null);
++do $$ begin
++  begin perform 1 from public.coach_data_auth; raise exception 'FOUT: anon kan lezen';
++  exception when insufficient_privilege then null; end;
++  begin insert into public.coach_data_auth(user_id,id,payload) values ('11111111-1111-1111-1111-111111111111','x','{}'); raise exception 'FOUT: anon kan schrijven';
++  exception when insufficient_privilege then null; end;
++end $$;
++commit;
++
++begin;
++select pg_temp.as_user('11111111-1111-1111-1111-111111111111');
++-- optimistische conflictcontrole zoals de app: update met updated_at-filter op oude waarde raakt 0 rijen
++do $$ declare n int; old timestamptz; begin
++  select updated_at into old from public.coach_data_auth;
++  update public.coach_data_auth set payload='{"v":2}', updated_at=old+interval '1 second' where updated_at=old;
++  get diagnostics n=row_count; if n<>1 then raise exception 'FOUT: eerste update moet slagen'; end if;
++  update public.coach_data_auth set payload='{"v":3}', updated_at=old+interval '2 second' where updated_at=old;
++  get diagnostics n=row_count; if n<>0 then raise exception 'FOUT: verouderde update mag niets raken'; end if;
++end $$;
++commit;
++\echo 'OK coach_data_auth: eigenaar/ander/anon/conflictcontrole'
+diff --git a/supabase/tests/20_storage_current.test.sql b/supabase/tests/20_storage_current.test.sql
+new file mode 100644
+index 0000000..d48505b
+--- /dev/null
++++ b/supabase/tests/20_storage_current.test.sql
+@@ -0,0 +1,19 @@
++-- Toont LOKAAL het risico van de huidige (door de app voorgestelde) anon-policies op coach-knowledge.
++\set ON_ERROR_STOP on
++-- policies zoals app.js knowledgeStorageSql() ze voorschrijft
++create policy "coach knowledge read" on storage.objects for select to anon using (bucket_id='coach-knowledge');
++create policy "coach knowledge insert" on storage.objects for insert to anon with check (bucket_id='coach-knowledge');
++create policy "coach knowledge update" on storage.objects for update to anon using (bucket_id='coach-knowledge') with check (bucket_id='coach-knowledge');
++insert into storage.objects(bucket_id,name,metadata) values ('coach-knowledge','a1b2c3/pvb1.fckb','{"size":100}');
++begin;
++set local role anon;
++do $$ declare n int; begin
++  select count(*) into n from storage.objects where bucket_id='coach-knowledge';
++  if n<>1 then raise exception 'verwacht: anon kan objectnamen zien'; end if;
++  update storage.objects set metadata='{"size":1}' where name='a1b2c3/pvb1.fckb';
++  get diagnostics n=row_count;
++  if n<>1 then raise exception 'verwacht: anon kan bestaand object overschrijven'; end if;
++  insert into storage.objects(bucket_id,name) values ('coach-knowledge','vreemd/bestand.fckb');
++end $$;
++commit;
++\echo 'AANGETOOND (lokaal): met de huidige app-policies kan anon objecten in coach-knowledge zien, toevoegen en overschrijven'
+diff --git a/supabase/tests/30_storage_proposal.test.sql b/supabase/tests/30_storage_proposal.test.sql
+new file mode 100644
+index 0000000..bd9ea92
+--- /dev/null
++++ b/supabase/tests/30_storage_proposal.test.sql
+@@ -0,0 +1,34 @@
++-- Test van voorstel 0002 (na toepassen): alleen de ingelogde eigenaar in de eigen map.
++\set ON_ERROR_STOP on
++insert into storage.objects(bucket_id,name) values ('coach-knowledge','11111111-1111-1111-1111-111111111111/pvb1.fckb') on conflict do nothing;
++begin;
++set local role anon;
++do $$ declare n int; begin
++  select count(*) into n from storage.objects where bucket_id='coach-knowledge';
++  if n<>0 then raise exception 'FOUT: anon ziet nog objecten'; end if;
++  begin insert into storage.objects(bucket_id,name) values ('coach-knowledge','x/y.fckb'); raise exception 'FOUT: anon kan uploaden';
++  exception when insufficient_privilege then null; end;
++  update storage.objects set metadata='{}' where bucket_id='coach-knowledge';
++  get diagnostics n=row_count; if n<>0 then raise exception 'FOUT: anon kan overschrijven'; end if;
++end $$;
++commit;
++begin;
++select set_config('role','authenticated',true), set_config('request.jwt.claim.sub','22222222-2222-2222-2222-222222222222',true);
++do $$ declare n int; begin
++  select count(*) into n from storage.objects where bucket_id='coach-knowledge';
++  if n<>0 then raise exception 'FOUT: ander account ziet bestanden van eigenaar'; end if;
++  begin insert into storage.objects(bucket_id,name) values ('coach-knowledge','11111111-1111-1111-1111-111111111111/inbraak.fckb'); raise exception 'FOUT: schrijven in map van ander';
++  exception when insufficient_privilege then null; end;
++  insert into storage.objects(bucket_id,name) values ('coach-knowledge','22222222-2222-2222-2222-222222222222/eigen.fckb');
++end $$;
++commit;
++begin;
++select set_config('role','authenticated',true), set_config('request.jwt.claim.sub','11111111-1111-1111-1111-111111111111',true);
++do $$ declare n int; begin
++  select count(*) into n from storage.objects where bucket_id='coach-knowledge';
++  if n<>1 then raise exception 'FOUT: eigenaar ziet precies zijn eigen bestand niet (%)', n; end if;
++  update storage.objects set metadata='{"size":5}' where name='11111111-1111-1111-1111-111111111111/pvb1.fckb';
++  get diagnostics n=row_count; if n<>1 then raise exception 'FOUT: eigenaar kan eigen bestand niet vervangen'; end if;
++end $$;
++commit;
++\echo 'OK voorstel 0002: anon niets, ander account niets, eigenaar alleen eigen map'
+diff --git a/supabase/tests/run-local.sh b/supabase/tests/run-local.sh
+new file mode 100755
+index 0000000..178a9d4
+--- /dev/null
++++ b/supabase/tests/run-local.sh
+@@ -0,0 +1,28 @@
++#!/usr/bin/env bash
++# Draait de SQL-tests tegen een TIJDELIJKE lokale PostgreSQL-cluster (geen Supabase, geen netwerk).
++# Een geslaagde lokale test bewijst NIET dat productie veilig is; zie supabase/verify/verify-production.sql.
++set -euo pipefail
++HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$(cd "$HERE/.." && pwd)"
++PGBIN="${PGBIN:-$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -V | tail -1)}"
++[ -x "$PGBIN/initdb" ] || PGBIN="$(dirname "$(command -v initdb || echo /nonexistent)")"
++if [ ! -x "$PGBIN/initdb" ]; then echo "OVERGESLAGEN: PostgreSQL (initdb) niet gevonden"; exit 0; fi
++TMP="$(mktemp -d)"; PORT="${PGPORT_TEST:-54329}"
++RUN=(); if [ "$(id -u)" = "0" ]; then chown -R postgres "$TMP"; RUN=(runuser -u postgres --); fi
++cleanup(){ "${RUN[@]}" "$PGBIN/pg_ctl" -D "$TMP/data" -m fast stop >/dev/null 2>&1 || true; rm -rf "$TMP"; }
++trap cleanup EXIT
++"${RUN[@]}" "$PGBIN/initdb" -D "$TMP/data" -A trust -U coachtest >/dev/null
++"${RUN[@]}" "$PGBIN/pg_ctl" -D "$TMP/data" -o "-p $PORT -k $TMP -c listen_addresses=''" -l "$TMP/log" -w start >/dev/null
++PSQL=("${RUN[@]}" "$PGBIN/psql" -h "$TMP" -p "$PORT" -U coachtest -d postgres -v ON_ERROR_STOP=1 -q)
++run(){ echo "== $1"; "${PSQL[@]}" -f "$1"; }
++run "$HERE/00_supabase_stub.sql"
++run "$ROOT/reference/0001_coach_data_auth.sql"
++run "$ROOT/reference/0001_coach_data_auth.sql"   # idempotentie
++run "$HERE/10_coach_data_auth.test.sql"
++run "$ROOT/reference/0001_coach_data_auth.rollback.sql"
++run "$ROOT/reference/0001_coach_data_auth.sql"
++run "$HERE/20_storage_current.test.sql"
++run "$ROOT/proposals/0002_coach_knowledge_owner_only.sql"
++run "$HERE/30_storage_proposal.test.sql"
++run "$ROOT/proposals/0002_coach_knowledge_owner_only.rollback.sql"
++run "$ROOT/proposals/0002_coach_knowledge_owner_only.sql"
++echo "ALLE LOKALE SQL-TESTS GESLAAGD (lokaal aangetoond, niet productiegeverifieerd)"
+diff --git a/supabase/verify/verify-production.sql b/supabase/verify/verify-production.sql
+new file mode 100644
+index 0000000..893a790
+--- /dev/null
++++ b/supabase/verify/verify-production.sql
+@@ -0,0 +1,37 @@
++-- ALLEEN LEZEN. Uitvoeren in het Supabase-dashboard (SQL Editor) van project ckodnfshelblddfypmmv.
++-- Wijzigt niets. Plak de uitkomst in docs/SUPABASE.md § Productieverificatie (zonder gegevensinhoud).
++
++-- 1. Bestaat de tabel en staat RLS aan (en geforceerd)?
++select c.relname, c.relrowsecurity as rls_aan, c.relforcerowsecurity as rls_geforceerd
++from pg_class c join pg_namespace n on n.oid=c.relnamespace
++where n.nspname='public' and c.relname in ('coach_data_auth','coach_data');
++
++-- 2. Kolommen en primaire sleutel
++select column_name, data_type, is_nullable from information_schema.columns
++where table_schema='public' and table_name='coach_data_auth' order by ordinal_position;
++select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid='public.coach_data_auth'::regclass;
++
++-- 3. Policies (verwacht: 3 voor authenticated, alle met user_id = auth.uid(); geen anon, geen delete)
++select policyname, cmd, roles, qual, with_check from pg_policies
++where schemaname='public' and tablename in ('coach_data_auth','coach_data') order by tablename, policyname;
++
++-- 4. Tabelrechten (verwacht: anon geen; authenticated alleen SELECT/INSERT/UPDATE)
++select grantee, table_name, string_agg(privilege_type, ', ' order by privilege_type) as rechten
++from information_schema.role_table_grants
++where table_schema='public' and table_name in ('coach_data_auth','coach_data') and grantee in ('anon','authenticated','public')
++group by grantee, table_name order by table_name, grantee;
++
++-- 5. Storage-buckets (publiek of privé; limieten)
++select id, public, file_size_limit, allowed_mime_types from storage.buckets where id in ('coach-knowledge','vc2');
++
++-- 6. Storage-policies die de buckets raken
++select policyname, cmd, roles, qual, with_check from pg_policies
++where schemaname='storage' and tablename='objects'
++  and (coalesce(qual,'') ilike '%coach-knowledge%' or coalesce(with_check,'') ilike '%coach-knowledge%'
++    or coalesce(qual,'') ilike '%vc2%' or coalesce(with_check,'') ilike '%vc2%' or roles::text ilike '%anon%')
++order by policyname;
++
++-- 7. Aantallen (geen inhoud): objecten per bucket en per eerste map
++select bucket_id, (storage.foldername(name))[1] as map, count(*) as bestanden, sum((metadata->>'size')::bigint) as bytes
++from storage.objects where bucket_id in ('coach-knowledge','vc2') group by 1,2 order by 1,2;
++select count(*) as rijen, count(distinct user_id) as gebruikers, max(updated_at) as laatst_gewijzigd from public.coach_data_auth;
+-- 
+2.43.0
+

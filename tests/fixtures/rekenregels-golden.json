@@ -1,0 +1,29 @@
+{
+  "generatedFrom": "main@9b74826 (v2.9.1) op tests/fixtures/rekenregels-dataset.json (fictief), vaste datum 2026-11-08",
+  "sections": {
+    "attendancePct": {
+      "entries": 18,
+      "sha256": "cc43eccf9dea6833e4951d23895c9d9b6cbbd57503cd5819bf0fcdbddedb93a6"
+    },
+    "attendanceStats": {
+      "entries": 18,
+      "sha256": "baef6906258e226039498daf282d88763f688531a16000339dac43f089f7e85b"
+    },
+    "trainingCounts": {
+      "entries": 26,
+      "sha256": "52bb54f930a8aa08bb3442c660706c4df0780b86a0b278a2475213fec79a3939"
+    },
+    "matchCounts": {
+      "entries": 5,
+      "sha256": "39eb07d17350b174a61788712292006e77361c205dc8e1b15c1b31467cd60f98"
+    },
+    "selection": {
+      "entries": 5,
+      "sha256": "f034df01c832bc7bb4be0be78db925e7467b089fbc5018cea56a9450a5552189"
+    },
+    "sheet": {
+      "entries": 5,
+      "sha256": "ffba21e8327013bebc547ab61436cb549f92cc31343296bd434e1e77181bd9a7"
+    }
+  }
+}

@@ -256,3 +256,7 @@ html,body{width:100%;max-width:100%;overflow-x:hidden}
 .guest-picker{max-height:42vh;overflow:auto;margin-top:12px}.guest-temp{margin-top:12px}.guest-temp summary{cursor:pointer;font-weight:700}
 .training-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}.training-group{border:1px solid var(--line,#d8e3dc);border-radius:14px;padding:12px}.training-group h3{margin:0 0 8px;display:flex;justify-content:space-between;align-items:center}
 @media(max-width:560px){.sheet-export-actions .btn{flex-basis:100%}}
+
+/* 2.10 · toegankelijkheid: zichtbare toetsenbordfocus (zelfde kleuren, geen huisstijlwijziging) en minder beweging op verzoek */
+.btn:focus-visible,.icon-btn:focus-visible,.nav-item:focus-visible,.bottom-nav button:focus-visible,.prompt-chip:focus-visible,.list-row:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--green-2);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}

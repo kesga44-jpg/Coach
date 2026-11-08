@@ -1,0 +1,808 @@
+From 5ffa6957675ad17c751517bca130212548ff9ca3 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:32:31 +0100
+Subject: [PATCH 8/9] Documentatie 2.10.0: README, AGENTS/CLAUDE, architectuur,
+ datamodel, Supabase, API-register, beveiliging, back-up, testen, release,
+ installatie, huisstijlvoorstel, changelog
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ AGENTS.md                  | 35 +++++++++++++++
+ CHANGELOG.md               | 37 ++++++++++++++++
+ CLAUDE.md                  |  5 +++
+ LEESMIJ.md                 |  9 +++-
+ README.md                  | 62 ++++++++++++++++++++++++++
+ backup.test.js             |  8 ++++
+ docs/API_INTEGRATIONS.md   | 54 ++++++++++++++++++++++
+ docs/ARCHITECTURE.md       | 77 ++++++++++++++++++++++++++++++++
+ docs/BACKUP_RESTORE.md     | 48 ++++++++++++++++++++
+ docs/DATAMODEL.md          | 65 +++++++++++++++++++++++++++
+ docs/HUISSTIJL_VOORSTEL.md | 20 +++++++++
+ docs/INSTALLATIE.md        | 47 ++++++++++++++++++++
+ docs/RELEASE.md            | 27 +++++++++++
+ docs/SECURITY.md           | 36 +++++++++++++++
+ docs/SUPABASE.md           | 91 ++++++++++++++++++++++++++++++++++++++
+ docs/TESTING.md            | 35 +++++++++++++++
+ 16 files changed, 655 insertions(+), 1 deletion(-)
+ create mode 100644 AGENTS.md
+ create mode 100644 CHANGELOG.md
+ create mode 100644 CLAUDE.md
+ create mode 100644 README.md
+ create mode 100644 docs/API_INTEGRATIONS.md
+ create mode 100644 docs/ARCHITECTURE.md
+ create mode 100644 docs/BACKUP_RESTORE.md
+ create mode 100644 docs/DATAMODEL.md
+ create mode 100644 docs/HUISSTIJL_VOORSTEL.md
+ create mode 100644 docs/INSTALLATIE.md
+ create mode 100644 docs/RELEASE.md
+ create mode 100644 docs/SECURITY.md
+ create mode 100644 docs/SUPABASE.md
+ create mode 100644 docs/TESTING.md
+
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+index 0000000..a61bade
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,35 @@
++# AGENTS.md — regels voor AI-codeassistenten in de Coach-repository
++
++Leidend kader: `personal-ecosystem/CLAUDE.md`, `DECISIONS.md` en `docs/adr/`. Bij strijd wint de strengste regel. Bij twijfel: stoppen en vragen.
++
++## Altijd
++
++1. Lees eerst `README.md`, `LEESMIJ.md`, `docs/ARCHITECTURE.md` en `docs/DATAMODEL.md`.
++2. Vanilla JS, geen buildstap. **Geen** React, TypeScript, Tailwind of grote refactor (ecosysteem-CLAUDE.md §1).
++3. Bestaand patroon voor uitbreidingen: een functie in `app.js` uitbreiden door hem te omhullen (`const xBase=x; x=function(){…}`), in een gemarkeerd versieblok vóór `document.addEventListener('click',handleClick)`. Klikhandlers lopen via `handleClick`; die wordt pas daarna geregistreerd.
++4. Bestaande gegevens blijven leesbaar: nieuwe velden zijn optioneel en worden in `normalize()` aangevuld; `validateStateData()` mag niet strenger worden voor bestaande back-ups.
++5. Kennis & Ontwikkeling (`kennis.js`, sleutel `footballCoachKnowledgeV1`) wordt nooit overschreven of verwijderd door herstel of sync; alleen aangevuld via `kdImport`.
++6. Versie ophogen = `APP_VERSION` in `app.js`, `?v=` in `index.html`, `CACHE` en `CORE` in `sw.js`, `package.json`, `manifest.json`. `static.test.js` controleert dit.
++7. Voor elke wijziging tests toevoegen; `npm run check && npm test` moet groen zijn. Bij database/Storage ook `npm run test:db`.
++8. Eén onderwerp per PR, eerst een voorstel, nooit zelf mergen (ADR 0011). Geen directe commits naar `main`.
++
++## Nooit
++
++- SQL uitvoeren tegen productie of policies wijzigen in project `ckodnfshelblddfypmmv` zonder afzonderlijk akkoord.
++- Een `service_role`/secret key, wachtwoord of token in code, tests, documentatie of logs.
++- Externe of betaalde AI-API's; spelersgegevens naar een dienst buiten het apparaat/eigen netwerk (R9, ADR 0008).
++- Strava-/Garmin-koppelingen (ADR 0009); GPX/FIT/TCX hoort bij de Sportapp.
++- Nieuwe CDN-scripts; bestaande alleen exact gepind (SRI is nog open, zie `docs/SECURITY.md`).
++- `innerHTML` met gebruikersinvoer zonder `esc()`.
++- Huisstijl wijzigen zonder apart akkoord (zie `docs/HUISSTIJL_VOORSTEL.md`).
++- Aannames als feit opschrijven: schrijf “niet geverifieerd”.
++
++## Rapportage na een taak
++
++```
++Gewijzigd: <bestanden>
++Waarom: <1–2 zinnen>
++Getest: <commando's + resultaat>
++Niet getest: <eerlijk>
++Risico's / open punten: <lijst>
++```
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+new file mode 100644
+index 0000000..113095c
+--- /dev/null
++++ b/CHANGELOG.md
+@@ -0,0 +1,37 @@
++# Changelog — Coach
++
++Formaat: per versie Toegevoegd / Gewijzigd / Beveiliging / Tests / Documentatie / Niet gedaan. Oudere versies: zie [LEESMIJ.md](LEESMIJ.md).
++
++## [2.10.0] — 2026-11-08 (branch `verbetering/2.10.0`, nog niet gemerged)
++
++Basis: `main@9b74826` (2.9.1 + CI PR #9).
++
++### Toegevoegd
++- **Back-up inclusief Kennis & Ontwikkeling** (`backupMeta`, `knowledgeModule`). Herstel toont vooraf aantallen; teamgegevens worden vervangen met herstelpunt; kennis wordt alleen aangevuld (dubbelen overgeslagen), nooit overschreven of verwijderd; `knowledgeFiles`-koppelingen blijven behouden (nieuwste wint). Groottegrens 25 MB, duidelijke melding bij een Kennis-export.
++- **Sync-basisversie** (`footballCoachSyncBaseV1`): stille autosync uploadt lokale wijzigingen als de cloud sindsdien niet is gewijzigd. Daarvoor gaf elke lokale wijziging na een sync een conflict.
++- **Veiligheidsrem sync**: geen stille upload bij opvallend minder spelers/trainingen/wedstrijden/oefeningen dan in de cloud; na herstel, reset of seizoensarchief eerst handmatig bevestigen.
++- **Lokale AI (Ollama)** in de coachassistent: modelveld in Instellingen, `/api/chat`-formaat, bronlabel, time-out, terugval op regelgebaseerd.
++
++### Gewijzigd
++- Coachassistent stuurt alleen naar lokale adressen (localhost/eigen netwerk); extern opgeslagen endpoints blijven bewaard maar worden niet gebruikt; instellingen weigeren een extern adres.
++- Meldingen (toast) blijven langer zichtbaar bij langere tekst; een nieuwe melding verkort de vorige niet meer.
++- Navigatie: `aria-current`, `aria-label` op icoonknoppen, `aria-live` op meldingen; zichtbare toetsenbordfocus; `prefers-reduced-motion`.
++- Service worker `football-coach-v2.10.0`; `kennis.js` nu network-first zoals `app.js`.
++
++### Beveiliging
++- R9 opgelost: geen namen, spelers-id's, geboortedata, contactgegevens, blessuredetails of vertrouwelijke notities naar een AI-endpoint; bevestiging per verzending; `credentials:'omit'`.
++- R2 interim: pdf.js `isEvalSupported:false`.
++- Waarschuwing bij de getoonde `coach-knowledge`-SQL (anon kan overschrijven).
++- Supabase: referentieschema `coach_data_auth`, voorstel `coach-knowledge` alleen-eigenaar (met rollback), alleen-lezen verificatiescript — **niets uitgevoerd op productie**.
++
++### Tests
++- 81 → 120 Node-tests (`backup`, `sync`, `ai`, `rekenregels`, `static`), inclusief gouden vergelijking van alle rekenuitkomsten met 2.9.1.
++- Lokale PostgreSQL-tests (RLS en Storage) en optionele Chromium-tests (desktop, iPhone/iPad-emulatie, XSS, back-up, offline).
++
++### Documentatie
++- Nieuw: `README.md`, `AGENTS.md`, `CLAUDE.md`, `docs/` (architectuur, datamodel, Supabase, API-register, beveiliging, back-up, testen, release, installatie, huisstijlvoorstel), `release/` (testverslag, uploadmanifest, patches), `.env.example`.
++
++### Niet gedaan (bewust, besluit nodig)
++- `coach-knowledge` naar Auth-RLS (PR-10), pdf.js 4.x (PR-4), SheetJS (PR-5), SRI.
++- Startdata met echte spelersnamen in de publieke repo.
++- Huisstijl rood-wit; externe voetbal-API's; OAuth 2.1; WebLLM.
+diff --git a/CLAUDE.md b/CLAUDE.md
+new file mode 100644
+index 0000000..a2f3c3d
+--- /dev/null
++++ b/CLAUDE.md
+@@ -0,0 +1,5 @@
++# CLAUDE.md
++
++Volg [AGENTS.md](AGENTS.md) (repo-specifiek) en `personal-ecosystem/CLAUDE.md` (ecosysteembreed). Bij strijd wint de strengste regel.
++
++Kort: vanilla JS zonder buildstap · geen productie-Supabase-wijzigingen · geen secrets · geen externe AI met spelersgegevens · kennis nooit overschrijven · `npm run check && npm test` groen · één onderwerp per PR, eigenaar merget.
+diff --git a/LEESMIJ.md b/LEESMIJ.md
+index a1288eb..e758bd3 100644
+--- a/LEESMIJ.md
++++ b/LEESMIJ.md
+@@ -7,6 +7,13 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
+ - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
+ - CI: `.github/workflows/tests.yml` draait `npm run check` en `npm test` (Node.js 22, Ubuntu 24.04) bij elke pull request en push naar `main`. Alleen leesrechten, geen secrets, geen Supabase-verbinding.
+ 
++### Coach main 2.10.0 — back-up incl. kennis, veilige autosync, privacy coachassistent
++Overzicht en documentatie: [README.md](README.md) en `docs/`. Wijzigingen: [CHANGELOG.md](CHANGELOG.md).
++- Back-up bevat nu ook Kennis & Ontwikkeling; herstel vult kennis alleen aan (nooit overschrijven/verwijderen) en behoudt kennisbankkoppelingen.
++- Autosync uploadt lokale wijzigingen zonder valse conflicten zolang de cloud niet door een ander apparaat is gewijzigd; veiligheidsrem bij opvallend minder gegevens.
++- Coachassistent: alleen lokale AI (bijv. Ollama), gepseudonimiseerd, bevestiging per verzending; zonder endpoint regelgebaseerd.
++- pdf.js zonder eval, toegankelijkheid, service worker 2.10.0, uitgebreide regressietests.
++
+ ### Coach main 2.9.1 — wedstrijdblad altijd één A4-pagina
+ - Het A4-PDF past het volledige wedstrijdblad, inclusief selectie en overige categorieën, automatisch op één staande pagina. Bij meer inhoud wordt de bladinhoud proportioneel verkleind in plaats van naar een tweede pagina te lopen of informatie af te breken. De WhatsApp-afbeelding blijft een verticale PNG van circa 4:5.
+ - Beide exports gebruiken hetzelfde gegevensmodel (`matchSheetModel`) en worden bij het klikken opnieuw opgebouwd uit de actuele wedstrijd. Rugnummer en naam staan in aparte kolommen, de volgorde volgt het wedstrijdformulier; doorgeschoven (1e / ander team), geblesseerde en afwezige spelers staan in aparte onderdelen en komen nooit dubbel voor. Lege onderdelen worden verborgen.
+@@ -70,4 +77,4 @@ Legenda: ✅ bestaat · 🟡 gedeeltelijk · ⬜ nog te bouwen
+ - Supabase: URL/key, tabel `coach_data_auth`, RLS, bucket `vc2` en map `VC2` verifiëren zodra netwerk beschikbaar is.
+ 
+ ## Kennis & Ontwikkeling (Meer → Kennis & Ontwikkeling)
+-Zelfstandige module in `kennis.js`. Opslag in een eigen localStorage-sleutel `footballCoachKnowledgeV1` (met laatste-versie-kopie in `footballCoachKnowledgeBackupV1`). `state`, `state.teams`, `save()`, `normalize()`, `validateStateData()`, back-up/herstel en Supabase-sync zijn niet gewijzigd. Let op: kennis wordt daarom **niet** meegenomen in de bestaande back-up of cloud-sync; gebruik "Kennis exporteren" in de module voor een eigen back-up. Tests: `npm test` (`kennis.test.js`).
++Zelfstandige module in `kennis.js`. Opslag in een eigen localStorage-sleutel `footballCoachKnowledgeV1` (met laatste-versie-kopie in `footballCoachKnowledgeBackupV1`). `state`, `state.teams`, `save()`, `normalize()`, `validateStateData()`, back-up/herstel en Supabase-sync zijn niet gewijzigd. Sinds 2.10.0 wordt kennis wél meegenomen in de back-up (veld `knowledgeModule`) en bij herstel alleen aangevuld; niet in de cloud-sync. "Kennis exporteren" blijft beschikbaar. Tests: `npm test` (`kennis.test.js`).
+diff --git a/README.md b/README.md
+new file mode 100644
+index 0000000..a2e53b8
+--- /dev/null
++++ b/README.md
+@@ -0,0 +1,62 @@
++# Football Coach (Coach)
++
++Zelfstandige PWA voor teambeheer van Full Speed O23: spelers, aanwezigheid, trainingen, oefeningen, wedstrijden, opstellingen, wedstrijdblad, spelmodel, kennisbank en een coachassistent.
++
++- Stack: vanilla JavaScript, HTML en CSS zonder buildstap (`index.html`, `app.js`, `kennis.js`, `style.css`, `sw.js`).
++- Opslag: lokaal in de browser (`localStorage`), optioneel versleutelde sync via Supabase-project B (`ckodnfshelblddfypmmv`).
++- Coach is volledig gescheiden van Samen Thuis, Hub, Sportapp en SIDEQUEST (ecosysteem-ADR 0001, 0006, 0007; `INTEGRATIONS.md` → “Coach ↔ overige: geen datakoppeling”).
++
++Huidige versie: **2.10.0** (zie [CHANGELOG.md](CHANGELOG.md)). De uitgebreide historie per versie staat in [LEESMIJ.md](LEESMIJ.md).
++
++## Snel starten
++
++```bash
++npm run check   # syntaxcontrole (app.js, kennis.js, sw.js)
++npm test        # alle unit- en regressietests (Node.js 22, geen dependencies)
++```
++
++Lokaal openen: start een statische webserver in deze map (bijvoorbeeld `python3 -m http.server 8080`) en ga naar `http://localhost:8080/`. Zie [docs/INSTALLATIE.md](docs/INSTALLATIE.md).
++
++Optioneel:
++
++```bash
++npm run test:db    # RLS-/Storage-tests tegen een tijdelijke lokale PostgreSQL (vereist PostgreSQL)
++npm run test:e2e   # Chromium-browsertest (vereist: npm i -D playwright && npx playwright install chromium)
++```
++
++## Documentatie
++
++| Onderwerp | Bestand |
++|---|---|
++| Installatie en lokaal draaien | [docs/INSTALLATIE.md](docs/INSTALLATIE.md) |
++| Architectuur | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
++| Datamodel en opslagsleutels | [docs/DATAMODEL.md](docs/DATAMODEL.md) |
++| Supabase (auth, sync, RLS, Storage, OAuth 2.1-vooruitblik) | [docs/SUPABASE.md](docs/SUPABASE.md) |
++| API- en integratieregister (incl. voetbal-API's, AI, Strava/Garmin) | [docs/API_INTEGRATIONS.md](docs/API_INTEGRATIONS.md) |
++| Beveiliging en privacy | [docs/SECURITY.md](docs/SECURITY.md) |
++| Back-up en herstel | [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) |
++| Testen | [docs/TESTING.md](docs/TESTING.md) |
++| Release | [docs/RELEASE.md](docs/RELEASE.md) |
++| Huisstijlvoorstel rood-wit (niet uitgevoerd) | [docs/HUISSTIJL_VOORSTEL.md](docs/HUISSTIJL_VOORSTEL.md) |
++| Regels voor AI-assistenten | [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md) |
++| Testverslag en uploadmanifest 2.10.0 | [release/TESTVERSLAG.md](release/TESTVERSLAG.md), [release/UPLOADMANIFEST.md](release/UPLOADMANIFEST.md) |
++
++## Status per onderdeel (2.10.0)
++
++Legenda: **I** = geïmplementeerd · **L** = lokaal getest (Node/PostgreSQL/Chromium in de ontwikkelomgeving) · **CI** = draait in GitHub Actions · **P** = in productie geverifieerd · **–** = nee
++
++| Onderdeel | I | L | CI | P | Opmerking |
++|---|---|---|---|---|---|
++| Spelers, teams, aanwezigheid, trainingen, wedstrijden, wedstrijdblad (bestaand) | ✅ | ✅ | ✅¹ | – | Rekenregels ongewijzigd; gouden vergelijking met 2.9.1 |
++| Back-up inclusief Kennis & Ontwikkeling, additief herstel | ✅ | ✅ | ✅¹ | – | Nieuw in 2.10.0 |
++| Sync zonder valse conflicten (basisversie) + veiligheidsrem | ✅ | ✅ (gemockte server) | ✅¹ | – | Niet tegen echte Supabase getest |
++| Coachassistent: alleen lokale AI, pseudonimisering, bevestiging | ✅ | ✅ | ✅¹ | – | Ollama-koppeling niet met een echt model getest |
++| pdf.js zonder eval (interim R2) | ✅ | statisch | ✅¹ | – | Upgrade naar 4.x blijft PR-4 |
++| Toegankelijkheid (aria, focus, minder beweging) | ✅ | ✅ Chromium | – | – | |
++| Service worker 2.10.0 / offline start | ✅ | ✅ Node + Chromium | ✅¹ (Node-deel) | – | |
++| `coach_data_auth` referentieschema + RLS-tests | SQL | ✅ PostgreSQL 16 | – | – | Niet uitgevoerd op productie |
++| `coach-knowledge` alleen-eigenaar | voorstel | ✅ PostgreSQL 16 | – | – | **Goedkeuring nodig** + app-wijziging (PR-10) |
++| OAuth 2.1 / gedeelde login | – | – | – | – | Coach doet niet mee (ADR 0017) |
++| Externe voetbal-API's | – | – | – | – | Alleen onderzocht, niets gebouwd |
++
++¹ Na merge: de nieuwe testbestanden zitten in `npm test`, dat de bestaande workflow `.github/workflows/tests.yml` al draait. In deze oplevering is CI **niet** uitgevoerd (geen push).
+diff --git a/backup.test.js b/backup.test.js
+index e26e028..1ece9f2 100644
+--- a/backup.test.js
++++ b/backup.test.js
+@@ -123,3 +123,11 @@ test('back-up van de echte startdata: alle trainingen, aanwezigheid en wedstrijd
+   assert.deepStrictEqual(b.t.state.matches.map(m=>[m.id,m.lineup,m.benchIds]),orig.matches.map(m=>[m.id,m.lineup,m.benchIds]));
+   assert.deepStrictEqual(b.t.state.players.map(p=>[p.id,p.name,p.teamIds]),orig.players.map(p=>[p.id,p.name,p.teamIds]));
+ });
++
++test('back-up bevat geen Secret key, sessietokens of syncgegevens',()=>{
++  const a=appWithKennis([update('U1',[item('Sprint','a1')])]);
++  a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:'Zeer-Geheim-123'});
++  a.ls.data['footballCoachAuthV1']=JSON.stringify({access_token:'acc-tok-xyz',refresh_token:'ref-tok-xyz',user:{id:'11111111-2222-3333-4444-555555555555'}});
++  const txt=JSON.stringify(a.t.buildFullBackup());
++  for(const s of ['Zeer-Geheim-123','acc-tok-xyz','ref-tok-xyz','sb_publishable'])assert.ok(!txt.includes(s),s);
++});
+diff --git a/docs/API_INTEGRATIONS.md b/docs/API_INTEGRATIONS.md
+new file mode 100644
+index 0000000..825fa68
+--- /dev/null
++++ b/docs/API_INTEGRATIONS.md
+@@ -0,0 +1,54 @@
++# API- en integratieregister — Coach
++
++Peildatum: 2026-11-08. Regel: geen fictieve endpoints; alleen wat in de code staat of in (officiële) documentatie is gezien. “Niet geverifieerd” betekent: niet bij de bron gecontroleerd.
++
++## 1. Daadwerkelijk geïntegreerd (bestaand)
++
++| Dienst | Doel | Gegevens die de app verstuurt | Status 2.10 |
++|---|---|---|---|
++| Supabase Auth (project B) | Inloggen voor sync | e-mail, wachtwoord (alleen bij inloggen/registreren), tokens | Ongewijzigd |
++| Supabase REST `coach_data_auth` | Versleutelde sync | versleutelde payload, `user_id`, `updated_at` | Logica verbeterd (basisversie) |
++| Supabase Storage `coach-knowledge` | Versleutelde kennisbankoriginelen | versleuteld bestand | Ongewijzigd; waarschuwing + voorstel |
++| Supabase Storage `vc2` | VC2-documenten lezen/indexeren | geen (alleen lezen) | Ongewijzigd |
++| jsDelivr CDN | Bibliotheken, pas bij gebruik geladen | IP/User-Agent naar CDN | Ongewijzigd (zie §4) |
++
++## 2. Alleen voorbereid / optioneel door de gebruiker in te stellen
++
++| Integratie | Wat is gebouwd | Wat is niet gebouwd |
++|---|---|---|
++| Lokale AI via Ollama (`POST http://localhost:11434/api/chat`, `stream:false`, antwoord in `message.content`) — bron: [Ollama API-documentatie](https://github.com/ollama/ollama/blob/main/docs/api.md) | Endpointcontrole (alleen localhost/eigen netwerk), gepseudonimiseerde context, bevestiging per verzending, bronlabel, time-out, terugval op regelgebaseerd | Niet getest met een echt model. Ollama staat standaard alleen browserverzoeken vanaf localhost-origins toe; voor gebruik vanaf de gehoste app moet de eigenaar `OLLAMA_ORIGINS` op de app-origin zetten ([toelichting](https://webhookrelay.com/localhost/11434/), niet-officieel). Of de browser vanaf een https-pagina een lokaal http-adres toestaat (Private/Local Network Access) is **niet geverifieerd**. |
++| Generiek lokaal JSON-endpoint (`{prompt,context}` → `{answer}`) | Zelfde privacymaatregelen | – |
++| WebLLM | Niets (ADR 0008: fase F6, licentie- en CSP-controle eerst) | Volledig |
++
++## 3. Voetbaldata-API's — onderzoek (niets gebouwd)
++
++Vraag: voegt een externe API concrete waarde toe voor een amateurteam (Full Speed O23) zonder de architectuur of privacy te schaden?
++
++| API | Wat het biedt | Kosten / limieten | Bruikbaar voor Coach? | Bron / verificatie |
++|---|---|---|---|---|
++| **Sportlink Club.Dataservice** (KNVB-ledenadministratie) | Club, teams, competities per team, programma, uitslagen, standen | Toegang via een Club.Dataservice-**client-ID van de club** | **Meest relevant** (amateurcompetitie, eigen wedstrijdprogramma). Spelersgegevens worden in de bekeken bron niet genoemd. | Afgeleid uit open-source wrappers (PendoNL/php-club-dataservice, [laravel-sportlink-clubdataservice](https://root.packagist.org/packages/noaber/laravel-sportlink-clubdataservice)). Officiële documentatie, voorwaarden, base-URL, limieten en CORS **niet geverifieerd**; KNVB verwijst voor Sportlink-vragen naar de Sportlink Servicedesk ([knvb.nl](https://www.knvb.nl/node/60433)). |
++| football-data.org | Profcompetities (o.a. Eredivisie), wedstrijden, standen | Free: 10 verzoeken/min, 12 competities, geen spelers/statistieken, vertraagde scores | Nee: geen amateurcompetities | [Vergelijking door concurrent](https://www.thestatsapi.com/blog/thestatsapi-vs-football-data-org); bij football-data.org zelf **niet geverifieerd** |
++| API-Football (api-sports) | Profvoetbal: wedstrijden, opstellingen, spelers, statistieken | Free: 100 verzoeken/dag; voorwaarden via “Terms of use” | Nee voor teambeheer; amateurdekking niet vermeld; betaalde plannen uitgesloten | [api-football.com/pricing](https://www.api-football.com/pricing) |
++| Trainings-/prestatiedata (GPS-vesten, wearables) | – | – | Geen open, gratis API gevonden die bij een amateurteam past; gezondheids-/lichaamsdata horen niet naar externe diensten | Niet onderzocht in detail |
++
++**Conclusie:** geen integratie gebouwd. Een Sportlink-koppeling (programma en uitslagen ophalen) is de enige met concrete waarde, maar vereist: (1) een client-ID van de club, (2) bevestiging van voorwaarden en of het via de browser mag (anders een server/Edge Function), (3) een architectuurbesluit omdat het een externe dienst met clubgegevens is, (4) een afzonderlijk voorstel en PR (ADR 0011). Privacyrisico: beperkt zolang alleen programma/uitslagen worden opgehaald; geen spelersgegevens importeren zonder grondslag.
++
++## 4. Externe scripts (CDN, bestaand)
++
++| Bibliotheek | Versie | Gebruik | Opmerking |
++|---|---|---|---|
++| pdf.js (`pdfjs-dist`) | 3.11.174 | Tekst uit PDF's (VC2-index, Bronnen) | CVE-2024-4367 (opgelost in 4.2.67). **2.10: `isEvalSupported:false` (interim-maatregel uit ecosysteem-SECURITY R2).** Upgrade = PR-4. |
++| SheetJS (`xlsx`) | 0.18.5 (npm) | Excel-import (Bronnen) | Ecosysteem-R3: verouderd; upgrade via cdn.sheetjs.com = PR-5 |
++| jsPDF | 2.5.2 | Wedstrijdblad/rapporten als PDF | – |
++| html2canvas | 1.4.1 | Wedstrijdblad als afbeelding/PDF | – |
++| mammoth | 1.12.2 | DOCX-tekst (Bronnen) | – |
++
++Alle versies zijn exact gepind (gecontroleerd door `static.test.js`). **SRI ontbreekt nog** (R5): de CDN was vanuit de ontwikkelomgeving niet bereikbaar, dus hashes konden niet tegen de echte CDN-bestanden worden gecontroleerd. Een verkeerde hash zou de PDF-export breken; daarom niet blind toegevoegd.
++
++## 5. Strava en Garmin
++
++Besluit ADR 0009: geen directe koppeling, geen OAuth. Niets gebouwd. Een interoperabel importformaat (GPX/FIT/TCX) hoort bij de Sportapp. Voor Coach is er nu geen toepassing: Coach registreert teamtrainingen en aanwezigheid, geen individuele activiteiten. Mocht teambelasting ooit uit individuele bestanden moeten komen, dan alleen als **samenvatting** (duur/afstand) via een expliciet gebruikersbestand en na een nieuw besluit — en nooit gezondheidsdata naar externe diensten.
++
++## 6. Koppelingen met andere ecosysteem-apps
++
++Geen (INTEGRATIONS.md). De Hub mag alleen een deeplink naar Coach tonen (I-1) en `GET /auth/v1/health` van project B doen (I-2).
+diff --git a/docs/ARCHITECTURE.md b/docs/ARCHITECTURE.md
+new file mode 100644
+index 0000000..fce2e2a
+--- /dev/null
++++ b/docs/ARCHITECTURE.md
+@@ -0,0 +1,77 @@
++# Architectuur — Coach
++
++## Plaats in het ecosysteem
++
++Coach is een bestaande, zelfstandige app (ecosysteem `APP_REGISTRY.md`: id `coach`, project **B** `ckodnfshelblddfypmmv`). Besluiten die Coach raken:
++
++| Besluit | Gevolg voor Coach |
++|---|---|
++| ADR 0001 / ARCHITECTURE | Project B is alleen voor Coach (gegevens van derden gescheiden van privédata). |
++| ADR 0006 | Coach blijft in de eigen repository, niet in de monorepo. |
++| ADR 0007, 0017 | Coach houdt eigen accounts; doet niet mee aan gedeelde login of OAuth 2.1-spike. |
++| ADR 0008 | AI: regelgebaseerd eerst, lokale AI optioneel, geen betaalde API's. |
++| ADR 0009 | Geen Strava/Garmin; bestandsimport hoort bij de Sportapp. |
++| ADR 0010, 0014 | Back-ups van Coach (persoonsgegevens van derden) maximaal 6 maanden bewaren. |
++| ADR 0011 | Wijzigingen als afzonderlijke PR's na goedkeuring; eigenaar merget. |
++| INTEGRATIONS.md | Coach ↔ overige apps: geen datakoppeling (alleen Hub-deeplink I-1 en health-check I-2). |
++
++## Opbouw
++
++```
++index.html      shell: zijbalk (desktop), onderbalk (mobiel ≤ 860 px), #app, modal, verborgen file-inputs
++kennis.js       Kennis & Ontwikkeling: eigen opslagsleutel, import/controle/dubbelen, export (geladen vóór app.js)
++app.js          startdata, rekenregels, rendering per pagina, router (setPage/renderPage), klikhandler,
++                opslag/validatie/normalisatie, back-up/herstel, Supabase Auth + sync, kennisbank (Storage), VC2-index,
++                wedstrijdblad (PDF/PNG), coachassistent
++style.css       volledige vormgeving (CSS-variabelen in :root)
++sw.js           service worker: kernbestanden in cache, network-first voor app.js/kennis.js/style.css/index.html
++```
++
++### Router en event-handlers
++
++- `setPage(page)` zet `ui.page`, markeert de navigatie (`.active`, sinds 2.10 ook `aria-current`) en roept `renderPage()`.
++- `renderPage()` kiest per `ui.page` een `renderX()`-functie en vult `#app` met een HTML-string; `bindPage()` koppelt invoervelden.
++- Eén gedelegeerde klikhandler (`handleClick`) op `document`, gestuurd via `data-*`-attributen. Uitbreidingen omhullen de vorige handler (`handleClickLegacy`, `handleClickBase210`) en worden geregistreerd vóór `document.addEventListener('click',handleClick)`.
++
++### Uitbreidingspatroon (bestaand, voortgezet in 2.10)
++
++Functies worden niet herschreven maar omhuld: `const xBase=x; x=function(...a){ … xBase(...a) … }`. Dat houdt wijzigingen klein en per versie herkenbaar. Het 2.10-blok staat in `app.js` onder `Coach main 2.10.0 — uitbreidingen` en bevat: back-up incl. kennis, sync-basisversie, coachassistent-privacy, kennisbank-waarschuwing, `aria-current`, klikvalidatie.
++
++## Gegevensstromen
++
++```mermaid
++flowchart LR
++  UI[Coach UI] -->|save()| LS[(localStorage<br/>footballCoachDataV2)]
++  UI --> KD[(localStorage<br/>footballCoachKnowledgeV1)]
++  LS -->|AES-GCM, sleutel blijft lokaal| SYNC[Supabase REST<br/>coach_data_auth]
++  UI -->|versleuteld .fckb| KB[(Storage<br/>coach-knowledge)]
++  UI -->|alleen lezen| VC2[(Storage<br/>vc2/VC2)]
++  UI -->|optioneel, bevestigd, gepseudonimiseerd| AI[Lokale AI<br/>localhost / eigen netwerk]
++  UI -->|download/upload JSON| BK[Back-upbestand<br/>teamdata + kennis]
++```
++
++## Offline
++
++De app werkt volledig offline na het eerste bezoek: alle kernbestanden staan in de cache van de service worker; gegevens staan lokaal. Sync wacht tot het apparaat online is (`online`-event → stille sync). Externe bibliotheken (pdf.js, jsPDF, html2canvas, mammoth, SheetJS) worden pas bij gebruik van de CDN geladen en zijn offline **niet** beschikbaar (PDF-export, PDF/DOCX/XLSX-import).
++
++## AI-architectuur (ADR 0008)
++
++1. **Regelgebaseerd** (`localAssistant`): altijd beschikbaar, geen netwerk.
++2. **WebLLM**: niet gebouwd. Vereist WebGPU en het downloaden van modellen van externe hosts; volgens ADR 0008 pas in fase F6 na licentiecontrole en CSP-aanpassing. Geschikte toepassingen voor later: samenvatten van trainingsevaluaties, varianten van oefenvormen.
++3. **Ollama/lokaal endpoint**: sinds 2.10 alleen lokale adressen; gepseudonimiseerde context; bevestiging per verzending; antwoord met bronlabel, niet automatisch opgeslagen.
++
++Onderzochte toepassingen en hoe ze nu worden gedekt:
++
++| Toepassing | Regelgebaseerd (bestaand) | Lokale AI (optioneel) |
++|---|---|---|
++| Trainingsanalyse / aanwezigheid | laagste opkomst, wedstrijdminuten | vrije vragen over gepseudonimiseerde statistieken |
++| Trainingsvoorbereiding / oefenvormen | trainingsgenerator, sjablonen, VC2-passages | varianten bedenken bij oefeningen |
++| Evaluatie trainingsdoelen | IDP-doelen, trainingsreflectie | samenvatting van evaluaties |
++| Trainingsbelasting | handmatig veld `load`/`intensity`, periodisering | – (geen medische of fysieke advisering) |
++| Wedstrijdvoorbereiding / -analyse | wedstrijdplan, evaluatie, “volgende training” | koppeling evaluatie → trainingsfocus |
++
++## Niet in scope / bewust niet gedaan
++
++- Geen gedeelde database of gegevensstructuur met andere apps.
++- Geen centrale authenticatie; Coach blijft zelfstandig bruikbaar zonder account.
++- Geen nieuwe externe API-koppelingen (zie `docs/API_INTEGRATIONS.md`).
+diff --git a/docs/BACKUP_RESTORE.md b/docs/BACKUP_RESTORE.md
+new file mode 100644
+index 0000000..b0be6ed
+--- /dev/null
++++ b/docs/BACKUP_RESTORE.md
+@@ -0,0 +1,48 @@
++# Back-up en herstel — Coach 2.10.0
++
++## Wat zit erin?
++
++| Onderdeel | In de back-up (“Back-up downloaden”) | Toelichting |
++|---|---|---|
++| Teams, spelers, trainingen, aanwezigheid, gastspelers, groepen | ✅ | |
++| Wedstrijden, selecties, opstellingen, beschikbaarheid, rugnummers, evaluaties | ✅ | |
++| Oefeningen, sjablonen, spelmodel, seizoen, notities, staf, reflecties | ✅ | |
++| Koppelingen kennisbankoriginelen (`knowledgeFiles`) | ✅ | Alleen metadata; het versleutelde bestand blijft in Storage |
++| Kennis & Ontwikkeling (artikelen + updates) | ✅ **nieuw** | Als `knowledgeModule` (zelfde formaat als “Kennis exporteren”) |
++| VC2-tekstindex | – | Afgeleid; opnieuw op te bouwen met “Vernieuwen & indexeren” |
++| Seizoensarchieven | – | Worden bij archiveren als eigen JSON gedownload |
++| Secret key, inlogsessie | – **bewust** | Nooit in een back-upbestand |
++| Originele PDF/DOCX van de kennisbank | – | Bewaar zelf een kopie (zie SECURITY S1) |
++
++## Herstellen (Instellingen → Back-up importeren)
++
++1. Kies het JSON-bestand. De app controleert eerst (geldige JSON, max. 25 MB, structuur, dubbele id's).
++2. Een bevestigingsvenster toont: datum en appversie van de back-up, aantallen teams/spelers/trainingen/wedstrijden/oefeningen, en hoeveel kennisartikelen nieuw zijn en hoeveel al aanwezig.
++3. Na bevestiging:
++   - **Teamgegevens worden vervangen** door die uit de back-up (zoals voorheen). De huidige versie wordt eerst bewaard als herstelpunt (“Herstelkopie downloaden”).
++   - **Kennisbankkoppelingen blijven behouden**: koppelingen die lokaal bestaan maar niet in de back-up staan, blijven staan; bij dezelfde bron wint de nieuwste uploaddatum.
++   - **Kennis & Ontwikkeling wordt alleen aangevuld**: nieuwe artikelen worden toegevoegd, dubbelen (zelfde DOI/URL of titel+bron, of dezelfde update) overgeslagen. Er wordt nooit iets overschreven of verwijderd. De vorige kennisopslag blijft als laatste-versie-kopie bewaard.
++   - De sync-basis wordt gewist: de herstelde gegevens gaan pas naar de cloud na een handmatige “Upload nu”.
++
++### Gedrag bij fouten en gedeeltelijk herstel
++
++| Situatie | Gedrag |
++|---|---|
++| Geen geldige JSON, verkeerde structuur, te groot | Niets gewijzigd; melding |
++| Bestand is een Kennis-export | Niets gewijzigd; verwijzing naar Kennis & Ontwikkeling → Importeren |
++| Annuleren in het bevestigingsvenster | Niets gewijzigd |
++| Opslaan van teamgegevens mislukt (bijv. opslag vol) | Oude gegevens blijven; kennis wordt ook niet aangevuld |
++| Kennisonderdeel ongeldig | Teamgegevens wel hersteld, kennis ongewijzigd; waarschuwing vooraf |
++| Lokale kennisopslag onleesbaar | Teamgegevens wel hersteld; kennisopslag wordt **niet** aangeraakt |
++| Oude back-up (vóór 2.10, zonder kennis) | Volledig bruikbaar; kennis blijft ongewijzigd |
++| Zeer oude back-up (V1, ontbrekende velden) | `normalize()` vult aan (o.a. voor-/achternaam, teams, gastspelers) |
++
++## Aanbevolen werkwijze
++
++- Download een back-up vóór elke grotere actie (seizoen archiveren, herstel, nieuwe appversie) en ten minste maandelijks.
++- Bewaar back-ups veilig: ze bevatten persoonsgegevens van spelers (onversleuteld JSON). Ecosysteembeleid: Coach-back-ups maximaal 6 maanden bewaren (ADR 0010/0014).
++- Cloud-sync is geen back-up: één rij per account, de laatste versie wint na bevestiging.
++
++## Tests
++
++`backup.test.js` (12 tests): inhoud, round-trip met kennis-unie, idempotentie, oude/minimale back-ups, knowledgeFiles-samenvoeging, ongeldige invoer, ongeldig kennisonderdeel, onleesbare kennisopslag, mislukte opslag, bevestigingstekst, startdata identiek, geen geheimen. Plus de Chromium-test die een echte download controleert.
+diff --git a/docs/DATAMODEL.md b/docs/DATAMODEL.md
+new file mode 100644
+index 0000000..fb02f94
+--- /dev/null
++++ b/docs/DATAMODEL.md
+@@ -0,0 +1,65 @@
++# Datamodel — Coach 2.10.0
++
++## Lokale opslag (`localStorage`)
++
++| Sleutel | Inhoud | Mee in back-up | Mee in cloud-sync |
++|---|---|---|---|
++| `footballCoachDataV2` | Hoofdstate (zie hieronder) | ✅ | ✅ (versleuteld) |
++| `footballCoachDataV1` | Oude opslag; wordt gelezen en naar V2 gekopieerd, nooit verwijderd | – | – |
++| `footballCoachKnowledgeV1` | Kennis & Ontwikkeling (`{version,updates[],items[]}`) | ✅ sinds 2.10 (`knowledgeModule`) | – |
++| `footballCoachKnowledgeBackupV1` | Vorige versie van de kennisopslag (bij elke wijziging) | – | – |
++| `footballCoachRecoveryBackupV1` | Herstelpunt vóór herstel/clouddownload/reset | – (wel downloadbaar) | – |
++| `footballCoachAutoBackupV1` | Dagelijkse automatische lokale kopie | – | – |
++| `footballCoachSeasonArchivesV1` | Laatste 3 seizoensarchieven | – (bij archiveren als JSON gedownload) | – |
++| `footballCoachCloudConflictV1` | Bewaarde cloudversie bij conflict | – | – |
++| `footballCoachSyncV1` | Versleutelingssleutel (“Secret key”) | – **bewust** | – |
++| `footballCoachAuthV1` | Supabase-sessie (access/refresh token) | – **bewust** | – |
++| `footballCoachSyncAccountV1` | Goedgekeurd sync-account (eerste upload) | – | – |
++| `footballCoachSyncBaseV1` | **Nieuw 2.10**: laatst gesynchroniseerde cloudversie `{userId,updatedAt}` | – | – |
++| `footballCoachVc2IndexV1` | Tekstindex van VC2-documenten (afgeleid, opnieuw op te bouwen) | – | – |
++
++## Hoofdstate (`footballCoachDataV2`)
++
++Top-level (alle optioneel bij inlezen; `normalize()` vult aan):
++
++`version`, `meta`, `team`, `club`, `teams[]`, `players[]`, `trainings[]`, `matches[]`, `exercises[]`, `tactics[]`, `seasonItems[]`, `coachNotes[]`, `documents[]`, `knowledgeFiles{}`, `settings`, `ai{endpoint,modelLabel,model}`, `gameModel{principles[],teamModels{}}`, `periodization`, `templates{trainings[],matches[]}`, `staff[]`, `coachReflections[]`, `teamDiagnostics[]`.
++
++### Belangrijkste objecten
++
++- **Speler**: `id`, `firstName`, `lastName`, `name` (afgeleid), `primaryTeamId`, `teamIds[]`, `position`, `number`, `selection`, `startDate` (“Aangemeld sinds”), `birthDate`, `active`, `availabilityStatus/Until/Note`, `scores{}`, `idp{goals[]}`, `developmentHistory[]`, `valueHistory[]`, `conversations[]`.
++- **Training**: `id`, `teamId`, `date`, `startTime`, `templateKey`, `focus`, `trainingObjective`, `planItems[{exerciseId,duration,coachPoints}]`, `attendance{spelerId|guest:<id> → status}`, `squadPlayerIds|null`, `guestPlayers[]`, `groups[]`, `groupAssign{}`, `cancelled`, `intensity`, `load`, `trainingEvaluation{}`, `quickReflection{}`.
++- **Wedstrijd**: `id`, `teamId`, `date`, `opponent`, `formation` (`4-3-3`, `5-3-2`, `4-2-3-1`, `4-4-2`), `lineup{positie → spelerId}`, `benchIds[]`, `promotedFirstIds[]`, `promotedO232Ids[]`, `availability{spelerId → {status,reason}}`, `playerNumbers{}` (tijdelijk rugnummer), `playerStats{}`, `attendance{}`, `plan{}`, `evaluation{}`, `checklist{}`, `sheetRemarks{}`, `cancelled`.
++- **knowledgeFiles**: `{bronId → {name,type,size,uploadedAt}}` — alleen metadata; het versleutelde bestand staat in Storage.
++
++### Rekenregels (ongewijzigd sinds 2.9.1)
++
++- Aanwezig = status begint met “Aanwezig”. Trainingspercentage = aanwezig / relevante trainingen (niet ingevuld telt als niet aanwezig).
++- Relevant: training van het huidige primaire team, niet geannuleerd, niet in de toekomst, op of na `startDate` (leeg = volledige historie), speler in de trainingsselectie (of geregistreerd), niet als meetrainer.
++- Meetrainers (`guestPlayers`, `guest:<id>`) tellen mee in de trainingstelling, niet in hun eigen teampercentage.
++- Basis/bank weigeren niet-beschikbare spelers; dubbele rugnummers worden gesignaleerd; een tijdelijk wedstrijdnummer wijzigt het profielnummer niet.
++
++`rekenregels.test.js` bewijst met een gouden vergelijking dat deze uitkomsten op de startdata identiek zijn aan v2.9.1.
++
++## Back-upformaat (2.10)
++
++De bestaande state-JSON blijft de basis; twee optionele velden zijn toegevoegd:
++
++```json
++{
++  "version": 2, "players": [], "trainings": [], "matches": [], "...": "...",
++  "backupMeta": {"format": "football_coach_backup", "version": 2, "appVersion": "2.10.0", "exportedAt": "…", "contains": ["…"]},
++  "knowledgeModule": {"format": "football_coach_knowledge_export_v1", "version": 1, "updates": [{"root": {}, "items": [{"category": "…", "raw": {}}]}]}
++}
++```
++
++- Oudere back-ups (zonder deze velden) blijven volledig bruikbaar.
++- Oudere app-versies kunnen een 2.10-back-up lezen; zij negeren het kennisonderdeel (het blijft als extra veld in hun state staan).
++
++## Cloudrij (`public.coach_data_auth`)
++
++`(user_id uuid, id text = 'football-coach-v2', payload jsonb = {v,salt,iv,data} AES-GCM/PBKDF2-160k, updated_at timestamptz)`; sleutel `(user_id,id)`. Zie `docs/SUPABASE.md`.
++
++## Storage
++
++- `coach-knowledge/<sha256('football-coach-v2:'+secret)>/<bronId>.fckb` — versleutelde originelen (`FCKB1`-header + AES-GCM).
++- `vc2/VC2/*.pdf|*.fckb` — VC2-documenten, alleen gelezen en lokaal geïndexeerd.
+diff --git a/docs/HUISSTIJL_VOORSTEL.md b/docs/HUISSTIJL_VOORSTEL.md
+new file mode 100644
+index 0000000..9ecc76f
+--- /dev/null
++++ b/docs/HUISSTIJL_VOORSTEL.md
+@@ -0,0 +1,20 @@
++# Voorstel: huisstijl rood-wit (NIET uitgevoerd)
++
++Status: **voorstel, wacht op apart akkoord.** In 2.10.0 is de vormgeving niet gewijzigd (alleen een zichtbare focusrand in de bestaande groene kleur en `prefers-reduced-motion`).
++
++## Huidige vormgeving
++
++- Kleuren als CSS-variabelen in `:root` (`style.css`): `--green:#0b5d3b`, `--green-2:#117749`, `--green-3:#e6f3eb`, `--text:#173128`, achtergrond `#f3f6f4`; zijbalk `#0c2f22`, mobiele onderbalk `#103126`.
++- `theme_color`/`background_color` in `manifest.json` en `<meta name="theme-color">` in `index.html`: groen.
++- Veel componenten gebruiken daarnaast vaste kleurwaarden (rgba/hex) buiten de variabelen; een kleurwissel raakt dus meer dan `:root`.
++- Wedstrijdblad (PDF/PNG) heeft een eigen Full Speed-ontwerp met logo (`FULL_SPEED_LOGO_DATA`).
++
++## Voorstel (aparte PR)
++
++1. Nieuwe tokens naast de bestaande (`--brand`, `--brand-2`, `--brand-soft`, `--nav-bg`) en alle vaste groentinten daarnaar laten verwijzen — eerst zonder zichtbare wijziging (refactor-PR, screenshotvergelijking).
++2. Daarna één PR die alleen de tokenwaarden naar rood-wit zet, bijvoorbeeld `--brand:#b3141c` (wit erop: contrast ≈ 6,9:1, voldoet aan WCAG AA), `--brand-soft:#fdecec`, navigatie donkerrood `#5a0a0e`.
++3. Statuskleuren (aanwezig = groen, afwezig = rood) behouden of herzien: met een rode merkkleur kan “afwezig” verwarrend worden → afwezig bijvoorbeeld donkeroranje.
++4. `manifest.json` en `theme-color` aanpassen; wedstrijdblad apart beoordelen.
++5. Contrastcontrole en screenshots op 375/768/1280 px vóór akkoord.
++
++Inschatting: twee kleine PR's; risico laag (alleen CSS/manifest), maar zichtbaar voor alle gebruikers.
+diff --git a/docs/INSTALLATIE.md b/docs/INSTALLATIE.md
+new file mode 100644
+index 0000000..4acb07b
+--- /dev/null
++++ b/docs/INSTALLATIE.md
+@@ -0,0 +1,47 @@
++# Installatie en lokaal draaien
++
++## Vereisten
++
++- Een moderne browser (Chrome/Edge/Safari/Firefox).
++- Voor ontwikkelen/testen: Node.js 22 (zelfde als CI). Optioneel PostgreSQL ≥ 14 en Playwright.
++
++## Lokaal starten
++
++```bash
++unzip coach-2.10.0.zip -d coach && cd coach
++python3 -m http.server 8080        # of: npx serve .
++# open http://localhost:8080/
++```
++
++Open de app via `http://` (niet als `file://`): de service worker en installatie als app werken alleen via http(s) of localhost.
++
++## Testen
++
++```bash
++npm run check
++npm test
++npm run test:db                     # optioneel, PostgreSQL nodig
++npm i -D playwright && npx playwright install chromium && npm run test:e2e   # optioneel
++```
++
++`.env.example` beschrijft de enige (optionele) variabelen voor deze hulpscripts. De app zelf gebruikt geen omgevingsvariabelen.
++
++## Installeren als app (PWA)
++
++- iPhone/iPad: Safari → Deel → “Zet op beginscherm”.
++- Android/desktop Chrome/Edge: menu → “App installeren”.
++
++## Sync instellen (optioneel)
++
++Instellingen → Sync: inloggen of registreren (Supabase-account in project B), daarna een Secret key kiezen (versleutelingssleutel, twee keer invoeren). Gebruik op elk apparaat dezelfde Secret key. Zie `docs/SUPABASE.md`.
++
++## Lokale AI (optioneel)
++
++1. Installeer Ollama op dit apparaat en een model naar keuze.
++2. Sta de app-origin toe in Ollama (`OLLAMA_ORIGINS`), anders weigert Ollama browserverzoeken van een andere origin.
++3. Instellingen → “Lokaal AI-endpoint”: `http://localhost:11434/api/chat`; “Lokaal model”: de modelnaam.
++4. Coachassistent → vraag stellen → bevestigen. Zonder deze stappen werkt de assistent regelgebaseerd.
++
++## Publiceren
++
++Upload de inhoud van deze map (zonder `node_modules/`, `tests/e2e/output/`) naar de bestaande hosting via een PR naar `main`. Zie `docs/RELEASE.md`.
+diff --git a/docs/RELEASE.md b/docs/RELEASE.md
+new file mode 100644
+index 0000000..22d7313
+--- /dev/null
++++ b/docs/RELEASE.md
+@@ -0,0 +1,27 @@
++# Releasehandleiding — Coach
++
++Coach wordt als statische site gehost (huidige werkwijze; ecosysteem DEPLOYMENT.md: GitHub Pages). Er is geen buildstap.
++
++## Checklist
++
++1. Branch vanaf `main`; één onderwerp per PR (ADR 0011). Voorstel eerst laten goedkeuren.
++2. Versie ophogen op alle plaatsen: `APP_VERSION` (app.js, 2.10-blok), kopcommentaar app.js, `?v=` in `index.html` (style, app, kennis), `CACHE` + `CORE` in `sw.js`, `package.json`, `manifest.json` (description).
++3. `npm run check && npm test` → groen. `static.test.js` faalt als versies niet gelijk lopen.
++4. Bij Supabase-wijzigingen: `npm run test:db`. **Nooit** SQL tegen productie zonder apart akkoord, verse back-up en hersteltest.
++5. Optioneel `npm run test:e2e`.
++6. Handmatige rooktest op echte apparaten: iPhone (Safari + geïnstalleerde PWA), iPad, laptop:
++   - app opent, laatste gegevens zichtbaar; navigatie onder/zijbalk;
++   - training openen, aanwezigheid zetten, opslaan; wedstrijd: selectie, opstelling, wedstrijdblad PDF + PNG;
++   - back-up downloaden en (op een testprofiel) herstellen;
++   - vliegtuigmodus: app start opnieuw.
++7. `CHANGELOG.md` bijwerken.
++8. PR openen; CI moet groen zijn; **de eigenaar merget**.
++9. Na publicatie: PWA's halen de nieuwe versie op bij de volgende start (nieuwe `CACHE`-naam ruimt de oude cache op). Vraag gebruikers zo nodig de app één keer volledig te sluiten.
++
++## Terugdraaien
++
++Revert de merge-commit en publiceer opnieuw. Gebruikersgegevens staan lokaal en blijven bestaan; 2.10 voegt alleen optionele velden/sleutels toe (`backupMeta`, `knowledgeModule` in back-upbestanden; `footballCoachSyncBaseV1`, `state.ai.model` lokaal), die oudere versies negeren.
++
++## Deze oplevering (2.10.0)
++
++Geleverd als ZIP met per onderwerp een patch in `release/patches/` zodat elk onderwerp als afzonderlijke PR kan worden ingediend. Zie `release/UPLOADMANIFEST.md`.
+diff --git a/docs/SECURITY.md b/docs/SECURITY.md
+new file mode 100644
+index 0000000..843c063
+--- /dev/null
++++ b/docs/SECURITY.md
+@@ -0,0 +1,36 @@
++# Beveiliging en privacy — Coach 2.10.0
++
++Classificatie van bewijs: **LA** = lokaal aangetoond (test in de ontwikkelomgeving) · **CI** = GitHub CI aangetoond · **PV** = productiegeverifieerd · **VR** = vermoedelijk risico · **OB** = onbekend.
++
++In deze oplevering is CI **niet** gedraaid (er is niet gepusht) en is **niets** in productie geverifieerd. Een lokale PostgreSQL-test bewijst niet dat productie veilig is.
++
++## Bevindingen
++
++| # | Onderwerp | Bevinding | Bewijs | Ernst | Maatregel 2.10 | Open |
++|---|---|---|---|---|---|---|
++| S1 | `coach-knowledge` | Door de app voorgeschreven policies geven `anon` lezen, toevoegen en **overschrijven** op de hele bucket. Inhoud versleuteld, maar integriteit/beschikbaarheid niet beschermd. | LA (risico aangetoond met de voorgeschreven SQL); productie OB | Middel | Waarschuwing in de app; voorstel 0002 + lokale tests | Goedkeuring + PR-10 + productiecontrole |
++| S2 | `vc2` | App leest met publishable key → `anon` heeft vermoedelijk leesrecht; PDF's dan leesbaar voor iedereen met de sleutel | VR | Laag–middel | Gedocumenteerd | Beoordelen bij PR-10 |
++| S3 | `coach_data_auth` RLS | Verwachte policies correct; productie onbekend | LA (referentie-SQL), productie OB | Middel tot verificatie | Referentie-SQL, verify-script, RLS-tests | Eigenaar draait verify-script |
++| S4 | AI-endpoint (R9) | Tot 2.9.1 werden namen, notities, ontwikkeldoelen en volledige trainings-/wedstrijdobjecten naar een vrij in te vullen URL gestuurd | LA (code) | Middel | **Opgelost:** alleen lokale adressen, pseudonimisering, minimale context, bevestiging, `credentials:'omit'` | – |
++| S5 | pdf.js 3.11.174 (R2) | CVE-2024-4367 | Bekend (ecosysteem-analyse) | Hoog | **Interim:** `isEvalSupported:false` | Upgrade 4.x (PR-4) |
++| S6 | SheetJS 0.18.5 (R3) | Verouderd | Bekend | Middel | – | PR-5 |
++| S7 | Geen SRI op CDN-scripts (R5) | Supply-chainrisico | LA (code) | Middel | Versies exact gepind (test) | SRI na online hashcontrole |
++| S8 | Startdata in publieke repo | `app.js` bevat startdata met **34 echte spelersnamen en 101 trainingen met aanwezigheid** (bron “Aanwezigheid spelers O23 – 26-27”). De repo is publiek (anoniem te klonen). Ook in de git-historie. | LA | Middel (AVG, gegevens van derden) | **Niet gewijzigd** (zou het eerste gebruik veranderen; besluit nodig) | Besluit: geanonimiseerde startdata + eventueel historie opschonen |
++| S9 | XSS | Rendering via template-strings met `esc()`; modaltitel via `textContent`; bestandsnamen in PDF-script gesaneerd; kennislinks alleen `https:` | LA: Chromium-test met `<img onerror>` in namen, teksten, kennis — 0 uitvoeringen op alle pagina's | Laag | Test toegevoegd | – |
++| S10 | Publishable key in code | Bedoeld voor browsercode; geen geheim. Geen secret/service-role key gevonden | LA (`static.test.js` scant) | – | Test | – |
++| S11 | Offline opslag | Gegevens, Secret key en sessietokens staan onversleuteld in `localStorage` van het apparaat | LA (code) | Laag–middel (gedeeld apparaat) | Gedocumenteerd | Advies: apparaatvergrendeling; uitloggen op gedeelde apparaten |
++| S12 | Back-upbestanden | JSON onversleuteld, bevat persoonsgegevens van spelers; bevat **geen** Secret key of tokens | LA (test) | Middel | Gedocumenteerd | Advies: veilig bewaren, max. 6 maanden (ADR 0014) |
++| S13 | Uploadbeveiliging | Kennis-JSON max. 5 MB; back-up max. 25 MB (nieuw); JSON-validatie; kennisbankbestanden worden versleuteld opgeslagen, niet uitgevoerd | LA | Laag | Groottegrens back-up | – |
++| S14 | Gezondheidsgegevens | `availabilityStatus/Note` en aanwezigheidsstatus “blessure/ziek” zijn gezondheidsgegevens | LA (code) | Middel (AVG) | Niet meer naar AI-endpoint | Dataminimalisatie (ecosysteem DATA_OWNERSHIP §5) |
++| S15 | Dependencies | Geen npm-runtime-dependencies; tests gebruiken alleen Node-ingebouwd. Playwright optioneel voor e2e | LA | – | – | – |
++| S16 | Secrets in ZIP | Gescand (`static.test.js` + handmatige grep): geen secret keys, tokens of wachtwoorden | LA | – | – | – |
++
++## Privacy van spelersgegevens (AVG — geen juridisch advies)
++
++Coach verwerkt naam, geboortedatum, (eventueel) e-mail, aanwezigheid en blessurestatus van spelers: persoonsgegevens van derden, deels gezondheidsgegevens. Aanbevelingen uit het ecosysteem (DATA_OWNERSHIP §5) blijven open en vragen een besluit: dataminimalisatie (geboortejaar i.p.v. -datum), spelers informeren, blessurestatus zonder medische details, back-ups beperkt bewaren. S4 (AI) is in 2.10 opgelost; S8 (startdata in publieke repo) vraagt het snelste besluit.
++
++## Verificatie in productie (niet uitgevoerd)
++
++1. `supabase/verify/verify-production.sql` in de SQL Editor (alleen lezen).
++2. Met de publishable key, zonder login, proberen `POST /storage/v1/object/list/coach-knowledge` → verwacht na hardening: leeg of 4xx.
++3. Supabase Security Advisor in het dashboard bekijken.
+diff --git a/docs/SUPABASE.md b/docs/SUPABASE.md
+new file mode 100644
+index 0000000..ac0cdbf
+--- /dev/null
++++ b/docs/SUPABASE.md
+@@ -0,0 +1,91 @@
++# Supabase — Coach (project B `ckodnfshelblddfypmmv`)
++
++> Status productie: **niet geverifieerd**. Vanuit de ontwikkelomgeving is `ckodnfshelblddfypmmv.supabase.co` niet bereikbaar (geweigerd door de netwerkproxy, 2026-11-08; eerder curl-exit 6). Er is in deze oplevering **niets** gewijzigd aan productie: geen SQL, geen policies, geen buckets.
++
++## Configuratie in de app
++
++| Instelling | Waarde / plaats |
++|---|---|
++| Project-URL | `SYNC_PROJECT_URL` bovenin `app.js` (ongewijzigd) |
++| Sleutel | `SYNC_PUBLIC_KEY` = **publishable** key (bedoeld voor browsercode; geen geheim). Nooit een `service_role`/secret key in de frontend. |
++| Auth | E-mail/wachtwoord via REST (`/auth/v1/token`, `/signup`, `/user`, `/logout`); sessie in `footballCoachAuthV1`, automatisch ververst en per sessie geverifieerd tegen `/auth/v1/user`. |
++| Tabel | `public.coach_data_auth`, rij-id `football-coach-v2`, sleutel `(user_id,id)`. De oude tabel `coach_data` wordt niet gebruikt en niet gewijzigd. |
++| Versleuteling | AES-GCM 256, PBKDF2-SHA-256 160.000 iteraties; de “Secret key” verlaat het apparaat nooit. |
++| Storage | `coach-knowledge` (versleutelde kennisbankoriginelen) en `vc2` (map `VC2`, alleen lezen). |
++
++> Let op: de centrale ecosysteemdocumentatie (`APP_REGISTRY.md`, `SECURITY.md` R8) noemt alleen bucket `vc2`. De code gebruikt daarnaast `coach-knowledge`. Voorstel: dit in `personal-ecosystem` aanvullen (aparte PR daar).
++
++## Synchronisatie en conflictbehandeling
++
++1. Upload: payload lokaal versleuteld; `POST` (nieuwe rij) of `PATCH … &updated_at=eq.<oude waarde>` (optimistische controle). Geen treffer of 409 = conflict: de cloudversie wordt lokaal bewaard (`footballCoachCloudConflictV1`), niets overschreven.
++2. Eerste upload naar een account zonder rij vraagt altijd bevestiging.
++3. **Nieuw in 2.10 — basisversie:** het apparaat onthoudt de laatst gesynchroniseerde `updated_at` (`footballCoachSyncBaseV1`). Is de cloud sindsdien niet gewijzigd, dan uploadt de stille autosync de lokale wijziging (“fast-forward”). Tot 2.9.1 gaf elke lokale wijziging na een sync bij autosync een conflict, waardoor automatische sync in de praktijk niet uploadde.
++4. **Veiligheidsrem:** geen stille upload als lokaal per categorie ≥ 3 én ≥ 20 % minder spelers/trainingen/wedstrijden/oefeningen staan dan in de cloud. Na herstel van een back-up, “Terug naar startdata” of seizoen archiveren wordt de basis gewist: eerst handmatig bevestigen.
++5. Download vervangt lokaal pas na bevestiging; de vorige lokale versie wordt herstelpunt.
++
++Getest met een gesimuleerde PostgREST-server (`sync.test.js`), niet tegen echte Supabase.
++
++## RLS, policies en tabelrechten
++
++Verwachte configuratie (LEESMIJ.md) en referentie-SQL: [`supabase/reference/0001_coach_data_auth.sql`](../supabase/reference/0001_coach_data_auth.sql)
++
++- RLS aan; drie policies voor `authenticated` (SELECT/INSERT/UPDATE) met `user_id = auth.uid()`; geen DELETE; niets voor `anon`.
++- Aanvullend voorstel (deel B in hetzelfde bestand, **niet uitgevoerd**): trigger die `user_id`/`id` onveranderlijk maakt en een groottegrens van 10 MB op `payload`.
++- Lokaal aangetoond (PostgreSQL 16, Supabase-nabootsing): eigenaar mag lezen/schrijven, ander account ziet en wijzigt niets, anon niets, geen delete, verouderde update raakt 0 rijen, script is idempotent, rollback werkt. Een mutatietest (extra `delete`-recht en `using (true)`) wordt door de tests afgekeurd.
++
++### Productieverificatie (door de eigenaar, alleen lezen)
++
++Voer [`supabase/verify/verify-production.sql`](../supabase/verify/verify-production.sql) uit in de SQL Editor van project B. Het script leest alleen catalogusgegevens en aantallen (geen inhoud). Leg de uitkomst vast in onderstaande tabel.
++
++| Controle | Verwacht | Productie |
++|---|---|---|
++| RLS op `coach_data_auth` | aan | niet geverifieerd |
++| Policies | 3× authenticated, `user_id = auth.uid()` | niet geverifieerd |
++| Rechten anon | geen | niet geverifieerd |
++| Bucket `coach-knowledge` | `public = false` | niet geverifieerd |
++| Storage-policies `coach-knowledge` | zie hieronder | niet geverifieerd |
++| Bucket `vc2` | privé, alleen lezen | niet geverifieerd |
++
++## Storage `coach-knowledge` — bevinding en voorstel
++
++**Bron:** de app toont onder Kennisbank → “Eenmalige Supabase-opslag instellen” SQL (`knowledgeStorageSql()`) die `anon` SELECT, INSERT en UPDATE geeft op alle objecten in de bucket. De app uploadt met `x-upsert: true` en de publishable key.
++
++| Aspect | Beoordeling |
++|---|---|
++| Publieke leesbaarheid (bucket `public`) | Bucket wordt privé aangemaakt (`public=false`): geen openbare URL. **Maar** de SELECT-policy voor `anon` maakt lezen/oplijsten via de API mogelijk voor iedereen met de publishable key. |
++| Leesbaarheid inhoud | Bestanden zijn client-side versleuteld; zonder Secret key onleesbaar. Bestandsnamen (bron-id's) en mapnaam (SHA-256 van de sleutel) zijn wel zichtbaar. |
++| Schrijven/overschrijven | `anon` INSERT + UPDATE: iedereen met de publishable key kan bestanden toevoegen en bestaande bestanden **overschrijven of onbruikbaar maken**. Lokaal aangetoond (`supabase/tests/20_storage_current.test.sql`). |
++| Verwijderen | Geen DELETE-policy in de voorgestelde SQL → verwijderen via API niet mogelijk (overschrijven wel). |
++| Productie | **Onbekend** of de bucket zo is ingericht. Classificatie: **vermoedelijk risico (middel)**. |
++
++**Voorstel** (niet uitgevoerd, goedkeuring nodig): [`supabase/proposals/0002_coach_knowledge_owner_only.sql`](../supabase/proposals/0002_coach_knowledge_owner_only.sql) met rollback. Alleen `authenticated`, alleen de eigen map `<auth.uid()>/…`, geen delete. Lokaal aangetoond: anon niets, ander account niets, eigenaar alleen eigen map.
++
++Afhankelijkheden (DEVELOPMENT_ROADMAP PR-10): eerst PR-9 (backend geverifieerd) en PR-3 (opslagback-up), daarna een app-wijziging die met het access token naar `<uid>/<id>.fckb` uploadt en bestaande bestanden kopieert (oude map pas na controle opruimen). Zonder die app-wijziging breekt het voorstel het koppelen/openen van originelen. Daarom is in 2.10 alleen een duidelijke waarschuwing bij de getoonde SQL toegevoegd.
++
++Tot dan: bewaar altijd een eigen kopie van de originele documenten (de kennisbank-samenvattingen staan in de app zelf en zijn niet afhankelijk van Storage).
++
++## Storage `vc2`
++
++De app leest `vc2/VC2` met de publishable key (list + download). Dat werkt alleen als `anon` daar mag lezen; policies zijn **niet geverifieerd**. PDF's in `vc2` zijn dan leesbaar voor iedereen met de publishable key (vermoedelijk opleidingsmateriaal; .fckb-bestanden zijn versleuteld). Beoordeel of dat acceptabel is (auteursrecht/vertrouwelijkheid); onderdeel van PR-10.
++
++## API-limieten (Supabase Free, ecosysteem `API_LIMITS.md`, gecontroleerd 2026-11-07)
++
++Relevant voor Coach: 500 MB database, 1 GB storage (max. 50 MB per bestand), 5 GB egress, **pauzeren na 7 dagen weinig activiteit** (winterstop!), geen automatische back-ups, Auth-mail 2 per uur. Coach zelf: één rij per account; de payload is de volledige versleutelde state (startdata: ca. 130 kB JSON, versleuteld en base64 ca. 1,4× zo groot; groeit met het seizoen).
++
++## Back-up en herstel van Supabase-gegevens
++
++Supabase Free maakt geen back-ups. De cloudrij is versleuteld en alleen met de Secret key te lezen; de JSON-back-up in de app is daarom de primaire back-up (zie `docs/BACKUP_RESTORE.md`). Server-side back-up volgt het ecosysteemplan (ADR 0010/0014, PR-3) en wacht op goedkeuring. Storage-back-up van project B wacht op PR-10.
++
++## Migraties
++
++| Bestand | Soort | Status |
++|---|---|---|
++| `supabase/reference/0001_coach_data_auth.sql` (+ rollback) | Referentie bestaande tabel + aanvulling | Lokaal getest, **niet** uitgevoerd |
++| `supabase/proposals/0002_coach_knowledge_owner_only.sql` (+ rollback) | Beveiligingsvoorstel Storage | Lokaal getest, **goedkeuring nodig**, vereist PR-10 |
++| `supabase/verify/verify-production.sql` | Alleen lezen | Klaar voor gebruik door eigenaar |
++
++## OAuth 2.1 en ecosysteem-authenticatie
++
++- ADR 0007: één gedeelde Auth in project A voor Samen Thuis, Hub, Sportapp en SIDEQUEST; **Coach houdt eigen accounts in project B** (gegevens van derden, andere gebruikersgroep).
++- ADR 0017: OAuth 2.1 Server van Supabase alleen als spike (H-PR17) tegen lokale Supabase; niets activeren in project A of B; **“Samen Thuis en Coach doen niet mee.”**
++- Gevolg: in Coach is niets gebouwd. Mogelijke latere stap (alleen na nieuw architectuurbesluit): Coach als OAuth-client van project A voor *inloggen*, terwijl gegevens in project B blijven — vereist cross-project tokenvalidatie en is daarom nu uitgesloten. Coach blijft zonder account volledig bruikbaar (alleen lokaal).
+diff --git a/docs/TESTING.md b/docs/TESTING.md
+new file mode 100644
+index 0000000..a35003e
+--- /dev/null
++++ b/docs/TESTING.md
+@@ -0,0 +1,35 @@
++# Testhandleiding — Coach
++
++## Overzicht
++
++| Commando | Wat | Vereist | In CI |
++|---|---|---|---|
++| `npm run check` | Syntaxcontrole `app.js`, `kennis.js`, `sw.js` | Node.js 22 | ✅ (bestaande workflow) |
++| `npm test` | Alle Node-tests (geen dependencies; `app.js`+`kennis.js` draaien in een `vm` met browserstubs, zie `harness.js`) | Node.js 22 | ✅ |
++| `npm run test:db` | RLS-/Storage-tests in een tijdelijke PostgreSQL-cluster met Supabase-nabootsing | PostgreSQL ≥ 14 (`initdb`), niet als root (script schakelt over naar `postgres`) | – |
++| `npm run test:e2e` | Chromium: alle pagina's, iPhone/iPad-emulatie, XSS, back-up-download, offline | `npm i -D playwright && npx playwright install chromium` | – |
++
++## Testbestanden
++
++| Bestand | Inhoud |
++|---|---|
++| `app.test.js` | Bestaand (63): opslag, V1→V2, validatie, sync/sessie/conflict, kennisbank-zoeken, sjablonen, spelers, aanwezigheid, gastspelers, groepen, wedstrijdstatus, rugnummers, wedstrijdblad |
++| `kennis.test.js` | Bestaand (18): Kennis & Ontwikkeling raakt andere data niet; dubbelen; export/import |
++| `backup.test.js` | Nieuw (12): back-up/herstel inclusief kennis |
++| `sync.test.js` | Nieuw (9): fast-forward, conflict met ander apparaat, tijdnotatie, veiligheidsrem, herstel → handmatig, ander account, pull, offline |
++| `ai.test.js` | Nieuw (9): alleen lokale endpoints, geen netwerk zonder endpoint/bevestiging, geen namen/id's/geboortedata/e-mail/blessure in verzending, Ollama-formaat, terugval, instellingen |
++| `rekenregels.test.js` | Nieuw (5): gouden vergelijking met v2.9.1 (hashes, geen namen) + randgevallen aanwezigheid en rugnummers |
++| `static.test.js` | Nieuw (4): versies index/sw/app gelijk, CORE-bestanden bestaan, geen geheimen, CDN-versies gepind, service worker offline (gesimuleerde cache) |
++| `supabase/tests/*.sql` | RLS `coach_data_auth`, huidig Storage-risico, voorstel 0002 |
++| `tests/e2e/chromium.e2e.js` | Browserstappen |
++
++## Wat de tests níét bewijzen
++
++- Geen test draait tegen de echte Supabase (netwerk geblokkeerd, en productie mag niet worden aangeraakt).
++- Mobiel = Chromium-emulatie, geen echte iOS Safari/WebKit. Test op een echte iPhone/iPad vóór release (zie `docs/RELEASE.md`).
++- CDN-bibliotheken (PDF-export, PDF/DOCX/XLSX-import) zijn in de ontwikkelomgeving niet geladen; wedstrijdblad-export is alleen op modelniveau getest (bestaande tests).
++- Ollama is niet met een echt model getest.
++
++## Nieuwe tests schrijven
++
++Gebruik `createApp({store,failWrites,confirmAnswer})` uit `harness.js`. Exporteer nieuwe functies via de lijst in `harness.js`. Let op: arrays/objecten uit de `vm` hebben een ander prototype — vergelijk met `.length`/`JSON.stringify` in plaats van `deepStrictEqual` op lege arrays.
+-- 
+2.43.0
+

@@ -1,0 +1,109 @@
+From e7fea01b9f75cbc17e49c83406c7a4063f428ade Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:26:48 +0100
+Subject: [PATCH 6/9] Optionele Chromium-browsertest (desktop,
+ iPhone/iPad-emulatie, back-up-download, offline)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ .gitignore                |  3 ++
+ tests/e2e/chromium.e2e.js | 76 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 79 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 tests/e2e/chromium.e2e.js
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..61b6eca
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,3 @@
++node_modules/
++tests/e2e/output/
++.env
+diff --git a/tests/e2e/chromium.e2e.js b/tests/e2e/chromium.e2e.js
+new file mode 100644
+index 0000000..2a6289d
+--- /dev/null
++++ b/tests/e2e/chromium.e2e.js
+@@ -0,0 +1,76 @@
++// Optionele browsertest (Chromium via Playwright). Niet onderdeel van `npm test`/CI omdat Playwright een
++// extra (dev)afhankelijkheid is. Installeren: `npm i -D playwright && npx playwright install chromium`.
++// Draaien: `npm run test:e2e`. Schermafbeeldingen komen in tests/e2e/output/ (niet in git).
++// Mobiel = Chromium met iPhone/iPad-emulatie (viewport, touch, user-agent) — GEEN echte Safari/WebKit.
++const http=require('http'),fs=require('fs'),path=require('path');
++let chromium,devices;
++try{({chromium,devices}=require('playwright'))}catch{console.log('OVERGESLAGEN: playwright niet geïnstalleerd');process.exit(0)}
++const ROOT=path.resolve(__dirname,'..','..'),OUT=path.join(__dirname,'output'),PORT=Number(process.env.E2E_PORT||8765);
++const TYPES={'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png'};
++fs.mkdirSync(OUT,{recursive:true});
++const server=http.createServer((q,r)=>{let p=decodeURIComponent(new URL(q.url,'http://x').pathname);if(p.endsWith('/'))p+='index.html';const f=path.join(ROOT,p);
++  if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){r.writeHead(404);return r.end()}
++  r.writeHead(200,{'Content-Type':TYPES[path.extname(f)]||'application/octet-stream','Cache-Control':'no-cache'});fs.createReadStream(f).pipe(r)});
++const results=[];let failed=0;
++async function step(name,fn){try{await fn();results.push(['OK',name]);console.log('ok   ',name)}catch(e){failed++;results.push(['FOUT',name,e.message]);console.log('FOUT ',name,'—',e.message)}}
++const assert=(c,m)=>{if(!c)throw new Error(m)};
++const PAGES=['dashboard','players','attendance','trainings','exercises','matches','tactics','gamemodel','season','stats','notes','knowledge','documents','assistant','settings'];
++
++(async()=>{
++  await new Promise(r=>server.listen(PORT,'127.0.0.1',r));
++  const base=`http://127.0.0.1:${PORT}/`;
++  const browser=await chromium.launch();
++  const watch=page=>{const errs=[];page.on('pageerror',e=>errs.push(e.message));page.on('console',m=>{if(m.type()==='error'&&!/net::ERR|Failed to load resource/.test(m.text()))errs.push(m.text())});return errs};
++
++  await step('desktop 1280: alle pagina\'s renderen zonder JavaScript-fouten',async()=>{
++    const ctx=await browser.newContext({viewport:{width:1280,height:900}}),page=await ctx.newPage(),errs=watch(page);
++    await page.goto(base);await page.waitForSelector('#app .card, #app section, #app div');
++    for(const p of PAGES){await page.click(`.side-nav [data-page="${p}"]`);await page.waitForTimeout(120);const len=await page.$eval('#app',e=>e.innerHTML.length);assert(len>200,`pagina ${p} leeg`)}
++    assert((await page.getAttribute('.side-nav [data-page="settings"]','aria-current'))==='page','aria-current op actieve pagina');
++    await page.click('.side-nav [data-page="dashboard"]');await page.screenshot({path:path.join(OUT,'desktop-dashboard.png')});
++    assert(!errs.length,'fouten: '+errs.join(' | '));await ctx.close();
++  });
++
++  for(const [label,dev] of [['iPhone 13',devices['iPhone 13']],['iPad (gen 7)',devices['iPad (gen 7)']]]){
++    await step(`${label} (Chromium-emulatie): navigatie zichtbaar, geen horizontaal scrollen`,async()=>{
++      const {defaultBrowserType,...opts}=dev;const ctx=await browser.newContext(opts),page=await ctx.newPage(),errs=watch(page);
++      await page.goto(base);await page.waitForTimeout(300);
++      const mobile=opts.viewport.width<=860;
++      if(mobile)assert(await page.isVisible('.bottom-nav'),'onderste navigatie zichtbaar');
++      for(const p of mobile?['dashboard','players','matches','stats','more']:['dashboard','players','trainings','matches','settings']){
++        await page.click(mobile?`.bottom-nav [data-page="${p}"]`:`.side-nav [data-page="${p}"]`);await page.waitForTimeout(150);
++        const o=await page.evaluate(()=>document.documentElement.scrollWidth-window.innerWidth);assert(o<=1,`pagina ${p}: ${o}px horizontale overloop`);
++      }
++      await page.screenshot({path:path.join(OUT,`${label.replace(/\W+/g,'-')}.png`)});
++      assert(!errs.length,'fouten: '+errs.join(' | '));await ctx.close();
++    });
++  }
++
++  await step('back-up downloaden bevat backupMeta en Kennis & Ontwikkeling',async()=>{
++    const ctx=await browser.newContext({acceptDownloads:true}),page=await ctx.newPage();
++    await page.addInitScript(()=>{if(!localStorage.getItem('footballCoachKnowledgeV1'))localStorage.setItem('footballCoachKnowledgeV1',JSON.stringify({version:1,updates:[{id:'u1',fingerprint:'f',importedAt:'2026-10-01',root:{title:'U'},itemIds:['i1']}],items:[{id:'i1',updateId:'u1',category:'Overig',raw:{title:'E2E-artikel',source:'Bron'}}]}))});
++    await page.goto(base);await page.click('.side-nav [data-page="settings"]');
++    const [dl]=await Promise.all([page.waitForEvent('download'),page.click('[data-export]')]);
++    const data=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
++    assert(data.backupMeta&&data.backupMeta.appVersion,'backupMeta ontbreekt');
++    assert(data.knowledgeModule&&data.knowledgeModule.updates[0].items[0].raw.title==='E2E-artikel','kennis ontbreekt');
++    assert(Array.isArray(data.trainings)&&data.trainings.length>0,'trainingen ontbreken');
++    await ctx.close();
++  });
++
++  await step('offline: na eerste bezoek start de app zonder netwerk (service worker)',async()=>{
++    const ctx=await browser.newContext(),page=await ctx.newPage(),errs=watch(page);
++    await page.goto(base);await page.evaluate(()=>navigator.serviceWorker.ready);
++    await page.reload();await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
++    await ctx.setOffline(true);await page.reload();await page.waitForTimeout(400);
++    assert((await page.$eval('#app',e=>e.innerHTML.length))>200,'app leeg offline');
++    assert(/Offline/.test(await page.textContent('#connectionState')),'offline-indicator');
++    await page.click('.side-nav [data-page="trainings"]');
++    await ctx.setOffline(false);
++    assert(!errs.length,'fouten: '+errs.join(' | '));await ctx.close();
++  });
++
++  await browser.close();server.close();
++  fs.writeFileSync(path.join(OUT,'resultaat.json'),JSON.stringify({at:new Date().toISOString(),results},null,2));
++  console.log(failed?`${failed} browserstap(pen) mislukt`:'ALLE BROWSERSTAPPEN GESLAAGD');process.exit(failed?1:0);
++})().catch(e=>{console.error(e);process.exit(1)});
+-- 
+2.43.0
+

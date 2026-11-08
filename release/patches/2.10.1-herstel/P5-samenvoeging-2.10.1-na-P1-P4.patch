@@ -1,0 +1,795 @@
+From 9504f73df7ff0a0cf249a9f11a2099151464edae Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 15:15:53 +0100
+Subject: [PATCH 1/3] Samenvoeging 2.10.1: versie, hulpscript en stappenplan
+ Git-geschiedenis, AI-preview in browsertest, documentatie
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ CHANGELOG.md                       |  18 ++++
+ README.md                          |  14 ++-
+ app.js                             |   2 +-
+ docs/GIT_GESCHIEDENIS_OPSCHONEN.md | 136 +++++++++++++++++++++++++++++
+ docs/TESTING.md                    |   9 +-
+ historie-inventaris.test.js        |  46 ++++++++++
+ index.html                         |   6 +-
+ manifest.json                      |   2 +-
+ package.json                       |   2 +-
+ static.test.js                     |   3 +-
+ sw.js                              |   4 +-
+ tests/e2e/chromium.e2e.js          |  19 ++++
+ tools/historie-inventaris.js       |  72 +++++++++++++++
+ 13 files changed, 318 insertions(+), 15 deletions(-)
+ create mode 100644 docs/GIT_GESCHIEDENIS_OPSCHONEN.md
+ create mode 100644 historie-inventaris.test.js
+ create mode 100644 tools/historie-inventaris.js
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 113095c..3e43c9b 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -2,6 +2,24 @@
+ 
+ Formaat: per versie Toegevoegd / Gewijzigd / Beveiliging / Tests / Documentatie / Niet gedaan. Oudere versies: zie [LEESMIJ.md](LEESMIJ.md).
+ 
++## [2.10.1] — 2026-11-08 (herstelronde, branch `herstel/2.10.1`, nog niet gemerged)
++
++Vier onafhankelijk toepasbare patches op 2.10.0 (`release/patches/2.10.1-herstel/`), plus deze samenvoegcommit.
++
++### Privacy en beveiliging
++- **P1 Startdata anonimiseren:** de 34 echte spelers, 101 trainingen en 5 wedstrijden in `app.js` zijn vervangen door fictieve voorbeelddata (`tools/maak-fictieve-startdata.js`). Bestaande installaties houden hun eigen gegevens; geen reset bij een update.
++- **P2 Supabase-verificatie:** `verify-production.sql` controleert alleen-lezend RLS, tabelrechten en policies in `public` en `storage.objects`, beide buckets apart, de oude tabel `coach_data`, met een samenvatting OK/RISICO. Sleutelcontrole: alleen een publishable key in de clientcode. Nieuwe bevindingen S17 (ongezouten hash van de Secret key als mapnaam) en S18 (oude tabel).
++- **P3 Sync-veiligheidsrem:** alle gegevenscategorieën, vergeleken op id (ook aanwezigheid, opstellingen, notities, sjablonen, spelprincipes, kennisbankkoppelingen); ophalen noemt vooraf wat lokaal verdwijnt.
++- **P4 AI-privacy:** tekstvelden met gezondheids-/blessuretermen worden weggelaten, een vraag met zulke termen wordt niet verstuurd, een laatste controle blokkeert bij twijfel, en de trainer ziet vooraf exact wat er naar het lokale model gaat.
++
++### Overig
++- Stappenplan `docs/GIT_GESCHIEDENIS_OPSCHONEN.md` + `tools/historie-inventaris.js` (lokaal gerepeteerd, niet uitgevoerd op GitHub).
++- `npm test` = `node --test` (alle `*.test.js`). Versie 2.10.1 (service-workercache vernieuwd).
++- Browsertest uitgebreid met de AI-preview.
++
++### Tests
++120 → 161 Node-tests; lokale SQL-scenario's voor het verify-script; 7 browserstappen. Mutatietests per patch: beveiliging verwijderen laat tests falen.
++
+ ## [2.10.0] — 2026-11-08 (branch `verbetering/2.10.0`, nog niet gemerged)
+ 
+ Basis: `main@9b74826` (2.9.1 + CI PR #9).
+diff --git a/README.md b/README.md
+index a2e53b8..e3abf0e 100644
+--- a/README.md
++++ b/README.md
+@@ -6,7 +6,7 @@ Zelfstandige PWA voor teambeheer van Full Speed O23: spelers, aanwezigheid, trai
+ - Opslag: lokaal in de browser (`localStorage`), optioneel versleutelde sync via Supabase-project B (`ckodnfshelblddfypmmv`).
+ - Coach is volledig gescheiden van Samen Thuis, Hub, Sportapp en SIDEQUEST (ecosysteem-ADR 0001, 0006, 0007; `INTEGRATIONS.md` → “Coach ↔ overige: geen datakoppeling”).
+ 
+-Huidige versie: **2.10.0** (zie [CHANGELOG.md](CHANGELOG.md)). De uitgebreide historie per versie staat in [LEESMIJ.md](LEESMIJ.md).
++Huidige versie: **2.10.1** (herstelronde op 2.10.0) (zie [CHANGELOG.md](CHANGELOG.md)). De uitgebreide historie per versie staat in [LEESMIJ.md](LEESMIJ.md).
+ 
+ ## Snel starten
+ 
+@@ -39,9 +39,11 @@ npm run test:e2e   # Chromium-browsertest (vereist: npm i -D playwright && npx p
+ | Release | [docs/RELEASE.md](docs/RELEASE.md) |
+ | Huisstijlvoorstel rood-wit (niet uitgevoerd) | [docs/HUISSTIJL_VOORSTEL.md](docs/HUISSTIJL_VOORSTEL.md) |
+ | Regels voor AI-assistenten | [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md) |
+-| Testverslag en uploadmanifest 2.10.0 | [release/TESTVERSLAG.md](release/TESTVERSLAG.md), [release/UPLOADMANIFEST.md](release/UPLOADMANIFEST.md) |
++| Herstelpatches 2.10.1 (risico's en instructies) | [docs/patches/](docs/patches/) |
++| Git-geschiedenis opschonen (handmatig) | [docs/GIT_GESCHIEDENIS_OPSCHONEN.md](docs/GIT_GESCHIEDENIS_OPSCHONEN.md) |
++| Testverslag, vergelijkingsrapport, uploadmanifest | [release/TESTVERSLAG.md](release/TESTVERSLAG.md), [release/VERGELIJKINGSRAPPORT.md](release/VERGELIJKINGSRAPPORT.md), [release/UPLOADMANIFEST.md](release/UPLOADMANIFEST.md) |
+ 
+-## Status per onderdeel (2.10.0)
++## Status per onderdeel (2.10.1)
+ 
+ Legenda: **I** = geïmplementeerd · **L** = lokaal getest (Node/PostgreSQL/Chromium in de ontwikkelomgeving) · **CI** = draait in GitHub Actions · **P** = in productie geverifieerd · **–** = nee
+ 
+@@ -50,7 +52,7 @@ Legenda: **I** = geïmplementeerd · **L** = lokaal getest (Node/PostgreSQL/Chro
+ | Spelers, teams, aanwezigheid, trainingen, wedstrijden, wedstrijdblad (bestaand) | ✅ | ✅ | ✅¹ | – | Rekenregels ongewijzigd; gouden vergelijking met 2.9.1 |
+ | Back-up inclusief Kennis & Ontwikkeling, additief herstel | ✅ | ✅ | ✅¹ | – | Nieuw in 2.10.0 |
+ | Sync zonder valse conflicten (basisversie) + veiligheidsrem | ✅ | ✅ (gemockte server) | ✅¹ | – | Niet tegen echte Supabase getest |
+-| Coachassistent: alleen lokale AI, pseudonimisering, bevestiging | ✅ | ✅ | ✅¹ | – | Ollama-koppeling niet met een echt model getest |
++| Coachassistent: alleen lokale AI, pseudonimisering, preview | ✅ | ✅ | ✅¹ | – | Ollama-koppeling niet met een echt model getest |
+ | pdf.js zonder eval (interim R2) | ✅ | statisch | ✅¹ | – | Upgrade naar 4.x blijft PR-4 |
+ | Toegankelijkheid (aria, focus, minder beweging) | ✅ | ✅ Chromium | – | – | |
+ | Service worker 2.10.0 / offline start | ✅ | ✅ Node + Chromium | ✅¹ (Node-deel) | – | |
+@@ -58,5 +60,9 @@ Legenda: **I** = geïmplementeerd · **L** = lokaal getest (Node/PostgreSQL/Chro
+ | `coach-knowledge` alleen-eigenaar | voorstel | ✅ PostgreSQL 16 | – | – | **Goedkeuring nodig** + app-wijziging (PR-10) |
+ | OAuth 2.1 / gedeelde login | – | – | – | – | Coach doet niet mee (ADR 0017) |
+ | Externe voetbal-API's | – | – | – | – | Alleen onderzocht, niets gebouwd |
++| P1 Fictieve startdata | ✅ | ✅ | ✅¹ | – | Git-historie nog niet opgeschoond (handmatig) |
++| P2 Verify-script productie (alleen lezen) | ✅ | ✅ PostgreSQL 16 | – | – | Eigenaar moet het in Supabase draaien |
++| P3 Veiligheidsrem sync, alle categorieën | ✅ | ✅ (gemockte server) | ✅¹ | – | |
++| P4 AI-privacy: gezondheidsfilter + exacte preview | ✅ | ✅ Node + Chromium | ✅¹ | – | Woordenlijst is niet volledig |
+ 
+ ¹ Na merge: de nieuwe testbestanden zitten in `npm test`, dat de bestaande workflow `.github/workflows/tests.yml` al draait. In deze oplevering is CI **niet** uitgevoerd (geen push).
+diff --git a/app.js b/app.js
+index 44fab80..2533b56 100644
+--- a/app.js
++++ b/app.js
+@@ -1774,7 +1774,7 @@ handleClick=function(e){
+    formaat als "Kennis exporteren"). Herstel vervangt de teamgegevens zoals voorheen, maar:
+    - Kennis & Ontwikkeling wordt alleen AANGEVULD (dubbelen worden overgeslagen), nooit overschreven of verwijderd;
+    - koppelingen naar versleutelde kennisbankoriginelen (knowledgeFiles) die lokaal bekend zijn blijven behouden. */
+-const APP_VERSION='2.10.0';
++const APP_VERSION='2.10.1';
+ const BACKUP_FORMAT='football_coach_backup';
+ const BACKUP_FORMAT_VERSION=2;
+ const BACKUP_MAX_BYTES=25*1024*1024;
+diff --git a/docs/GIT_GESCHIEDENIS_OPSCHONEN.md b/docs/GIT_GESCHIEDENIS_OPSCHONEN.md
+new file mode 100644
+index 0000000..6aa7181
+--- /dev/null
++++ b/docs/GIT_GESCHIEDENIS_OPSCHONEN.md
+@@ -0,0 +1,136 @@
++# Stappenplan: echte spelersgegevens uit de Git-geschiedenis verwijderen
++
++**Handmatig uit te voeren door de eigenaar. Niet automatiseren.** Claude heeft dit niet op GitHub uitgevoerd en niets geforceerd gepusht. Het plan is wel lokaal gerepeteerd op een kopie (zie § Proefuitvoering).
++
++Gebaseerd op de GitHub-handleiding [Removing sensitive data from a repository](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository) (geraadpleegd 2026-11-08).
++
++## Wat staat er in de geschiedenis?
++
++Inventaris van `main@9b74826` (36 commits):
++
++| Bestand | Commits met echte spelersgegevens |
++|---|---|
++| `app.js` (regel 2, `STARTER_DATA`) | 35 |
++| `starter-data.json` (alleen vroege commits) | 3 |
++| `starter-data.js` (alleen vroege commits) | 2 |
++| **Totaal** | **36 van 36 commits** (34 unieke spelers, eerste commit `081c00d`, 2026-09-04) |
++
++De screenshots in `docs/screenshots/` bevatten alleen fictieve testnamen en hoeven niet te worden aangepast.
++
++## Belangrijke gevolgen vooraf
++
++- **Alle commit-hashes veranderen** vanaf de eerste commit. Links naar commits en de diffweergave van oude PR's (#1–#9) werken daarna niet meer goed.
++- Open PR's eerst mergen of sluiten (GitHub-advies). Volgorde: patches 2.10.0 en herstelronde 2.10.1 eerst mergen, **daarna** de geschiedenis herschrijven. Anders moeten alle PR's opnieuw.
++- Kopieën die anderen al hebben (forks, clones, caches van derden) kun je niet terughalen. Controleer forks via GitHub → *Insights → Forks*.
++- Je eigen oude clones (laptop) bevatten nog de oude geschiedenis: na afloop verwijderen en opnieuw klonen. **Nooit** een oude clone pushen of mergen: dat zet de gegevens terug.
++- De repository blijft openbaar; GitHub Pages blijft gratis.
++
++## Vereisten
++
++- Git ≥ 2.36, Python 3, Node.js 22.
++- `git-filter-repo` **≥ 2.47** (voor `--sensitive-data-removal`): `pip install git-filter-repo` en daarna `git filter-repo --version`.
++- Het hulpscript `tools/historie-inventaris.js` (in deze repository; bevat zelf geen namen).
++- Een map **buiten** de repository voor het vervangbestand (bijv. `~/coach-opschonen/`).
++
++## Stap 1 — Volledige back-up van de repository
++
++```bash
++mkdir -p ~/coach-opschonen && cd ~/coach-opschonen
++git clone --mirror https://github.com/kesga44-jpg/Coach.git coach-backup.git
++tar czf coach-backup-$(date +%Y%m%d).tgz coach-backup.git
++```
++
++Bewaar het archief versleuteld en privé (het bevat de spelersgegevens). Verwijder het na een vooraf gekozen termijn (ecosysteembeleid: Coach-gegevens maximaal 6 maanden). Maak ook in de app op elk apparaat een back-up.
++
++## Stap 2 — Alle commits controleren
++
++```bash
++cd ~/coach-opschonen
++git clone --no-local --mirror coach-backup.git werk.git      # verse kopie van de back-up
++git clone --no-local werk.git schoon && cd schoon
++git fetch --all
++git rev-list --all | wc -l                                   # aantal commits (36 + latere merges)
++node /pad/naar/Coach/tools/historie-inventaris.js inventaris
++```
++
++Verwacht: `Commits met spelersgegevens` = alle commits tot en met de merge van patch 1. Namen worden niet getoond (alleen met `--toon`).
++
++> Tip: `filter-repo` wil een verse clone. Werk je direct vanaf GitHub, gebruik dan `git clone https://github.com/kesga44-jpg/Coach.git schoon`.
++
++## Stap 3 — Inventaris van alle bestanden met spelersgegevens
++
++De uitvoer van stap 2 toont per bestand in hoeveel commits namen voorkomen (`app.js`, `starter-data.json`, `starter-data.js`). Komt er een **ander** bestand bij: stop en beoordeel dat bestand eerst (opnemen in stap 4 met `--path`).
++
++## Stap 4 — Geschiedenis herschrijven met `git filter-repo`
++
++```bash
++node /pad/naar/Coach/tools/historie-inventaris.js vervangbestand --uit ../vervangingen.txt
++git filter-repo --sensitive-data-removal \
++  --invert-paths --path starter-data.json --path starter-data.js \
++  --replace-text ../vervangingen.txt
++```
++
++Wat er gebeurt:
++- `starter-data.json` en `starter-data.js` verdwijnen uit alle (oude) commits;
++- in elke oude versie van `app.js` wordt de echte `STARTER_DATA`-regel vervangen door een lege, fictieve regel. Fictieve startdata (vanaf patch 1, met `"fictional":true`) blijft ongemoeid;
++- elke volledige naam → `Verwijderde speler NN`, elk spelers-id → `p-verwijderd-NN` (vangnet voor andere plekken).
++
++`vervangingen.txt` bevat de echte namen: alleen buiten de repository bewaren en na afloop verwijderen (`shred -u ../vervangingen.txt` of veilig wissen).
++
++## Stap 5 — Nieuwe geschiedenis controleren (vóór het pushen)
++
++```bash
++node /pad/naar/Coach/tools/historie-inventaris.js controle --namen ../vervangingen.txt   # moet "SCHOON" geven
++git log --all --format= --name-only | grep -c starter-data                              # moet 0 zijn
++npm test                                                                                 # huidige app werkt nog
++grep -c '^refs/pull/.*/head$' .git/filter-repo/changed-refs                              # aantal geraakte PR's
++cat .git/filter-repo/first-changed-commits                                               # nodig voor GitHub Support
++git diff <oude-main-hash> HEAD --stat                                                    # verwacht: geen verschil in de huidige bestanden
++```
++
++Klopt iets niet: deze map weggooien en opnieuw beginnen bij stap 2. Tot en met stap 5 is er niets op GitHub veranderd.
++
++## Stap 6 — Geforceerd pushen met controle van het doel
++
++```bash
++git remote -v                         # moet exact https://github.com/kesga44-jpg/Coach.git zijn
++# zo nodig: git remote add origin https://github.com/kesga44-jpg/Coach.git
++git ls-remote origin                  # welke branches/refs staan er nu?
++git push --force --mirror --dry-run origin    # controleer: alleen kesga44-jpg/Coach, verwachte branches
++git push --force --mirror origin
++```
++
++- Fouten voor `refs/pull/*` zijn **normaal** (alleen-lezen bij GitHub; dat lost Support op).
++- Faalt een gewone branch: branch protection tijdelijk uitzetten (Settings → Branches), opnieuw pushen, protection weer aanzetten.
++- Push niet naar een andere repository of remote.
++
++## Stap 7 — GitHub-cacheverwijdering aanvragen
++
++Pas als alle gewone branches schoon zijn en er geen forks met de gegevens zijn: [GitHub Support](https://support.github.com/contact) → verzoek om gevoelige gegevens te verwijderen. Vermeld:
++- eigenaar en repository: `kesga44-jpg/Coach`;
++- het aantal geraakte PR's (stap 5);
++- de *First Changed Commit(s)* (stap 5);
++- dat het om persoonsgegevens van derden gaat (namen en afwezigheid, waaronder gezondheidsredenen).
++
++Support verwijdert de PR-verwijzingen, voert garbage collection uit en wist gecachte weergaven. Forks moet de eigenaar van de fork zelf opschonen.
++
++## Stap 8 — GitHub Pages controleren
++
++1. Settings → Pages: bron is nog steeds de juiste branch (`main`) en map.
++2. Actions → `pages-build-deployment`: laatste run geslaagd (wacht een paar minuten).
++3. Site openen in een privévenster; controleren dat de app laadt.
++4. Automatisch controleren dat de gepubliceerde `app.js` fictieve startdata heeft en geen namen bevat:
++   ```bash
++   node /pad/naar/Coach/tools/historie-inventaris.js site --url https://<gebruiker>.github.io/Coach/ --namen ../vervangingen.txt
++   ```
++5. Op je eigen apparaten: de app één keer volledig sluiten en openen (de service worker haalt de nieuwe versie op). Je eigen gegevens blijven staan.
++6. Daarna: `vervangingen.txt` veilig verwijderen en oude lokale clones verwijderen en opnieuw klonen.
++
++## Proefuitvoering (lokaal, 2026-11-08)
++
++Op een lokale kopie (bare repository als “origin”, met 2.10.0 en 2.10.1 als gemerged gesimuleerd: 50 commits):
++- inventaris: 34 spelers, 46 commits met gegevens (`app.js` 45, `starter-data.json` 3, `starter-data.js` 2);
++- `git filter-repo 2.47.0 --sensitive-data-removal --invert-paths … --replace-text …`: geslaagd;
++- controle: **SCHOON**, 0 commits met namen of spelers-id's; `starter-data.*` 0 keer in de historie; de huidige `app.js` byte-voor-byte gelijk; `npm test` 158/158;
++- `push --force --mirror` naar de lokale origin en controle in een nieuwe clone: SCHOON.
++- Niet gerepeteerd: GitHub-specifieke onderdelen (`refs/pull/*`, branch protection, Support, Pages).
+diff --git a/docs/TESTING.md b/docs/TESTING.md
+index a35003e..4278783 100644
+--- a/docs/TESTING.md
++++ b/docs/TESTING.md
+@@ -5,7 +5,7 @@
+ | Commando | Wat | Vereist | In CI |
+ |---|---|---|---|
+ | `npm run check` | Syntaxcontrole `app.js`, `kennis.js`, `sw.js` | Node.js 22 | ✅ (bestaande workflow) |
+-| `npm test` | Alle Node-tests (geen dependencies; `app.js`+`kennis.js` draaien in een `vm` met browserstubs, zie `harness.js`) | Node.js 22 | ✅ |
++| `npm test` | `node --test`: alle `*.test.js` (geen dependencies; `app.js`+`kennis.js` draaien in een `vm` met browserstubs, zie `harness.js`) | Node.js 22 | ✅ |
+ | `npm run test:db` | RLS-/Storage-tests in een tijdelijke PostgreSQL-cluster met Supabase-nabootsing | PostgreSQL ≥ 14 (`initdb`), niet als root (script schakelt over naar `postgres`) | – |
+ | `npm run test:e2e` | Chromium: alle pagina's, iPhone/iPad-emulatie, XSS, back-up-download, offline | `npm i -D playwright && npx playwright install chromium` | – |
+ 
+@@ -19,8 +19,13 @@
+ | `sync.test.js` | Nieuw (9): fast-forward, conflict met ander apparaat, tijdnotatie, veiligheidsrem, herstel → handmatig, ander account, pull, offline |
+ | `ai.test.js` | Nieuw (9): alleen lokale endpoints, geen netwerk zonder endpoint/bevestiging, geen namen/id's/geboortedata/e-mail/blessure in verzending, Ollama-formaat, terugval, instellingen |
+ | `rekenregels.test.js` | Nieuw (5): gouden vergelijking met v2.9.1 (hashes, geen namen) + randgevallen aanwezigheid en rugnummers |
++| `startdata.test.js` | 2.10.1 (6): startdata = fictieve generatoruitvoer, bestaande installaties ongemoeid |
++| `sleutels.test.js` | 2.10.1 (4): alleen publishable key, Secret key nooit verstuurd, bevinding S17 |
++| `sync-veiligheid.test.js` | 2.10.1 (22, waarvan 13 verliesscenario's): twee apparaten, race, alle categorieën, reset, archief, herstel |
++| `ai-privacy.test.js` | 2.10.1 (6): gezondheidsfilter, exacte preview, bij twijfel niet verzenden |
++| `historie-inventaris.test.js` | 2.10.1 (3): hulpscript Git-geschiedenis op synthetische repository |
+ | `static.test.js` | Nieuw (4): versies index/sw/app gelijk, CORE-bestanden bestaan, geen geheimen, CDN-versies gepind, service worker offline (gesimuleerde cache) |
+-| `supabase/tests/*.sql` | RLS `coach_data_auth`, huidig Storage-risico, voorstel 0002 |
++| `supabase/tests/*.sql`, `40_verify_scenario.sh` | RLS `coach_data_auth`, huidig Storage-risico, voorstel 0002, verify-script in vier scenario's |
+ | `tests/e2e/chromium.e2e.js` | Browserstappen |
+ 
+ ## Wat de tests níét bewijzen
+diff --git a/historie-inventaris.test.js b/historie-inventaris.test.js
+new file mode 100644
+index 0000000..9102de3
+--- /dev/null
++++ b/historie-inventaris.test.js
+@@ -0,0 +1,46 @@
++// Test van tools/historie-inventaris.js op een tijdelijke, synthetische git-repository (geen echte namen).
++const test=require('node:test'),assert=require('node:assert');
++const {execFileSync,spawnSync}=require('child_process'),fs=require('fs'),os=require('os'),path=require('path');
++const TOOL=path.join(__dirname,'tools','historie-inventaris.js');
++const run=(cwd,...a)=>spawnSync(process.execPath,[TOOL,...a],{cwd,encoding:'utf8'});
++function repoMetHistorie(){
++  const d=fs.mkdtempSync(path.join(os.tmpdir(),'coach-hist-')),g=(...a)=>execFileSync('git',['-C',d,...a],{encoding:'utf8'});
++  g('init','-q');g('config','user.email','t@t');g('config','user.name','t');
++  const echt={version:2,meta:{source:'test'},players:[{id:'p-anna-testpersoon',name:'Anna Testpersoon'},{id:'p-bram-proefkonijn',name:'Bram Proefkonijn'}],trainings:[{id:'t1',attendance:{'p-anna-testpersoon':'Afwezig (ziek)'}}]};
++  fs.writeFileSync(path.join(d,'app.js'),`/* v1 */\nwindow.STARTER_DATA=${JSON.stringify(echt)};\nconsole.log(1)\n`);g('add','.');g('commit','-qm','eerste');
++  fs.writeFileSync(path.join(d,'starter-data.json'),JSON.stringify(echt,null,2));g('add','.');g('commit','-qm','tweede');
++  fs.rmSync(path.join(d,'starter-data.json'));
++  fs.writeFileSync(path.join(d,'app.js'),`/* v2 */\nwindow.STARTER_DATA=${JSON.stringify({version:2,meta:{fictional:true},players:[{id:'p-fictief-01',name:'Aart Voorbeeldt'}]})};\n`);g('add','-A');g('commit','-qm','fictief');
++  return d;
++}
++test('inventaris vindt echte (niet-fictieve) spelers in alle commits en bestanden, zonder namen te tonen',()=>{
++  const d=repoMetHistorie(),r=run(d,'inventaris');
++  assert.strictEqual(r.status,0,r.stderr);
++  assert.match(r.stdout,/Unieke \(niet-fictieve\) spelers in de historie: 2/);
++  assert.match(r.stdout,/Commits met spelersgegevens: 2/);
++  assert.match(r.stdout,/starter-data\.json: 1/);
++  assert.ok(!/Anna|Bram|Aart/.test(r.stdout),'geen namen in de uitvoer');
++});
++test('vervangbestand wordt alleen buiten de repository geschreven en spaart fictieve startdata',()=>{
++  const d=repoMetHistorie();
++  assert.notStrictEqual(run(d,'vervangbestand','--uit',path.join(d,'v.txt')).status,0,'weigert binnen de repo');
++  const uit=path.join(os.tmpdir(),`vervang-${process.pid}.txt`);
++  assert.strictEqual(run(d,'vervangbestand','--uit',uit).status,0);
++  const txt=fs.readFileSync(uit,'utf8');
++  assert.ok(txt.includes('Anna Testpersoon==>Verwijderde speler')&&txt.includes('p-bram-proefkonijn==>p-verwijderd-'));
++  const rule=txt.split('\n').find(l=>l.startsWith('regex:')).slice(6).split('==>')[0];
++  const re=new RegExp(rule.replace('(?![^\\n]{0,200}','(?![^\\n]{0,200}'));
++  assert.ok(re.test('window.STARTER_DATA={"version":2,"meta":{"source":"x"},"players":[]};'),'echte startdata wordt vervangen');
++  assert.ok(!re.test('window.STARTER_DATA={"version":2,"meta":{"createdAt":"x","fictional":true},"players":[]};'),'fictieve startdata blijft');
++  const c=run(d,'controle','--namen',uit);
++  assert.strictEqual(c.status,1,'historie is nog niet schoon');assert.match(c.stdout,/NIET SCHOON/);
++  fs.rmSync(uit);
++});
++test('controle meldt SCHOON als geen naam meer voorkomt',()=>{
++  const d=fs.mkdtempSync(path.join(os.tmpdir(),'coach-schoon-')),g=(...a)=>execFileSync('git',['-C',d,...a]);
++  g('init','-q');g('config','user.email','t@t');g('config','user.name','t');
++  fs.writeFileSync(path.join(d,'app.js'),'console.log(1)\n');g('add','.');g('commit','-qm','x');
++  const namen=path.join(os.tmpdir(),`namen-${process.pid}.txt`);fs.writeFileSync(namen,'Anna Testpersoon==>Verwijderde speler 01\n');
++  const r=run(d,'controle','--namen',namen);
++  assert.strictEqual(r.status,0);assert.match(r.stdout,/SCHOON/);fs.rmSync(namen);
++});
+diff --git a/index.html b/index.html
+index d8b13cd..873c9df 100644
+--- a/index.html
++++ b/index.html
+@@ -11,7 +11,7 @@
+   <link rel="manifest" href="manifest.json">
+   <link rel="apple-touch-icon" href="icon-192.png">
+   <link rel="icon" href="icon-192.png">
+-  <link rel="stylesheet" href="style.css?v=2.10.0">
++  <link rel="stylesheet" href="style.css?v=2.10.1">
+ </head>
+ <body>
+   <div class="app-shell">
+@@ -71,7 +71,7 @@
+   <input id="docFile" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+ 
+-  <script src="kennis.js?v=2"></script>
+-  <script src="app.js?v=2.10.0"></script>
++  <script src="kennis.js?v=3"></script>
++  <script src="app.js?v=2.10.1"></script>
+ </body>
+ </html>
+diff --git a/manifest.json b/manifest.json
+index ab49478..e5a2e0d 100644
+--- a/manifest.json
++++ b/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "Football Coach - Full Speed O23",
+   "short_name": "Coach O23",
+-  "description": "Football Coach v2.10.0 · teambeheer, trainingen en wedstrijdvoorbereiding",
++  "description": "Football Coach v2.10.1 · teambeheer, trainingen en wedstrijdvoorbereiding",
+   "start_url": "./",
+   "scope": "./",
+   "display": "standalone",
+diff --git a/package.json b/package.json
+index cf5d257..21944b9 100644
+--- a/package.json
++++ b/package.json
+@@ -7,5 +7,5 @@
+     "test:db": "bash supabase/tests/run-local.sh",
+     "test:e2e": "node tests/e2e/chromium.e2e.js"
+   },
+-  "version": "2.10.0"
++  "version": "2.10.1"
+ }
+diff --git a/static.test.js b/static.test.js
+index 6390296..7d3f180 100644
+--- a/static.test.js
++++ b/static.test.js
+@@ -42,13 +42,14 @@ function loadSw(){
+   return {run,setOnline:v=>online=v,store,cacheNames,net};
+ }
+ test('service worker: installeert alle kernbestanden en werkt offline; oude caches worden opgeruimd',async()=>{
++  const core=JSON.parse(read('sw.js').match(/const CORE=(\[[^\]]+\])/)[1].replace(/'/g,'"'));
+   const sw=loadSw();
+   sw.cacheNames.add('football-coach-v2.9.1-kd1');
+   await sw.run('install',{});
+   await sw.run('activate',{});
+   assert.deepStrictEqual([...sw.cacheNames].filter(n=>n.startsWith('football-coach')).length,1);
+   sw.setOnline(false);
+-  for(const p of ['index.html','app.js?v=2.10.0','kennis.js?v=2','style.css?v=2.10.0','']){
++  for(const p of ['index.html',...core.filter(x=>/\?v=/.test(x)).map(x=>x.slice(2)),'']){
+     const url='https://kees.example/Coach/'+p;
+     const res=await sw.run('fetch',{request:{method:'GET',url}});
+     assert.ok(res&&res.body,'offline beschikbaar: '+(p||'./'));
+diff --git a/sw.js b/sw.js
+index 0ebb166..2ef40f2 100644
+--- a/sw.js
++++ b/sw.js
+@@ -1,5 +1,5 @@
+-const CACHE='football-coach-v2.10.0';
+-const CORE=['./','./index.html','./style.css?v=2.10.0','./app.js?v=2.10.0','./kennis.js?v=2','./manifest.json','./icon-192.png','./icon-512.png'];
++const CACHE='football-coach-v2.10.1';
++const CORE=['./','./index.html','./style.css?v=2.10.1','./app.js?v=2.10.1','./kennis.js?v=3','./manifest.json','./icon-192.png','./icon-512.png'];
+ 
+ self.addEventListener('install',event=>{
+   event.waitUntil(
+diff --git a/tests/e2e/chromium.e2e.js b/tests/e2e/chromium.e2e.js
+index ebe05b6..4af1914 100644
+--- a/tests/e2e/chromium.e2e.js
++++ b/tests/e2e/chromium.e2e.js
+@@ -69,6 +69,25 @@ const PAGES=['dashboard','players','attendance','trainings','exercises','matches
+     await ctx.close();
+   });
+ 
++  await step('AI-preview: lokaal endpoint toont exact verzoek zonder namen; annuleren verstuurt niets',async()=>{
++    const ctx=await browser.newContext({viewport:{width:1280,height:900}}),page=await ctx.newPage();let sent=0;
++    await page.route('**/api/chat',r=>{sent++;r.fulfill({status:200,contentType:'application/json',body:'{"message":{"content":"ok"}}'})});
++    await page.goto(base);await page.waitForTimeout(200);
++    const names=await page.evaluate(()=>{const d=JSON.parse(localStorage.getItem('footballCoachDataV2'));d.ai={...d.ai,endpoint:location.origin+'/api/chat',model:'testmodel'};localStorage.setItem('footballCoachDataV2',JSON.stringify(d));return d.players.map(p=>p.name)});
++    await page.reload();await page.click('.side-nav [data-page="assistant"]');
++    await page.fill('#assistantPrompt','Welke spelers hebben de laagste trainingsopkomst?');await page.click('[data-run-assistant]');
++    await page.waitForSelector('#aiPreviewBody',{timeout:3000});
++    const body=await page.textContent('#aiPreviewBody');
++    assert(body.includes('S1')&&!names.some(n=>body.includes(n)),'preview zonder namen');
++    await page.screenshot({path:path.join(OUT,'ai-preview.png')});
++    await page.click('#modal .modal-actions [value="cancel"]');await page.waitForTimeout(200);
++    assert(sent===0,'niets verstuurd na annuleren');
++    await page.click('[data-run-assistant]');await page.waitForSelector('#aiPreviewBody');await page.click('#modalSave');await page.waitForTimeout(400);
++    assert(sent===1,'precies één verzoek na “Versturen”');
++    assert(/Bron: lokaal AI-model/.test(await page.textContent('.assistant-box')),'bronlabel');
++    await ctx.close();
++  });
++
+   await step('back-up downloaden bevat backupMeta en Kennis & Ontwikkeling',async()=>{
+     const ctx=await browser.newContext({acceptDownloads:true}),page=await ctx.newPage();
+     await page.addInitScript(()=>{if(!localStorage.getItem('footballCoachKnowledgeV1'))localStorage.setItem('footballCoachKnowledgeV1',JSON.stringify({version:1,updates:[{id:'u1',fingerprint:'f',importedAt:'2026-10-01',root:{title:'U'},itemIds:['i1']}],items:[{id:'i1',updateId:'u1',category:'Overig',raw:{title:'E2E-artikel',source:'Bron'}}]}))});
+diff --git a/tools/historie-inventaris.js b/tools/historie-inventaris.js
+new file mode 100644
+index 0000000..1c26c06
+--- /dev/null
++++ b/tools/historie-inventaris.js
+@@ -0,0 +1,72 @@
++#!/usr/bin/env node
++// Hulpmiddel bij docs/GIT_GESCHIEDENIS_OPSCHONEN.md. Draait LOKAAL op een kloon; wijzigt de repository niet.
++// Bevat zelf geen namen: de spelersnamen worden uit de historie zelf gehaald (STARTER_DATA in app.js, starter-data.*).
++//
++//   node tools/historie-inventaris.js inventaris  [--repo PAD]
++//   node tools/historie-inventaris.js vervangbestand --uit ../vervangingen.txt [--repo PAD]
++//   node tools/historie-inventaris.js controle --namen ../vervangingen.txt [--repo PAD]
++//   node tools/historie-inventaris.js site --url https://<gebruiker>.github.io/Coach/ --namen ../vervangingen.txt
++//
++// Namen worden nooit naar de terminal geschreven (alleen aantallen), tenzij --toon wordt meegegeven.
++const {execFileSync}=require('child_process'),fs=require('fs'),path=require('path');
++const args=process.argv.slice(2),mode=args[0],opt=k=>{const i=args.indexOf(k);return i>=0?args[i+1]:null},flag=k=>args.includes(k);
++const repo=path.resolve(opt('--repo')||'.');
++const git=(...a)=>execFileSync('git',['-C',repo,...a],{encoding:'utf8',maxBuffer:1<<28});
++const blobCache=new Map();
++function blob(sha){if(!blobCache.has(sha))blobCache.set(sha,execFileSync('git',['-C',repo,'cat-file','-p',sha],{maxBuffer:1<<28}).toString('latin1'));return blobCache.get(sha)}
++function commits(){return git('rev-list','--all').trim().split('\n').filter(Boolean)}
++function tree(c){return git('ls-tree','-r',c).trim().split('\n').filter(Boolean).map(l=>{const [meta,p]=l.split('\t');const [,type,sha]=meta.split(' ');return {type,sha,path:p}}).filter(x=>x.type==='blob')}
++const TEXT=/\.(js|json|html|md|csv|txt|css|ya?ml|sql|sh)$/i;
++function starterJson(text){
++  const out=[];const m=text.match(/STARTER_DATA\s*=\s*(\{[\s\S]*?\})\s*;?\s*(\n|$)/);if(m)out.push(m[1]);
++  const t=text.trim();if(t.startsWith('{')&&t.includes('"players"'))out.push(t);
++  return out.map(s=>{try{return JSON.parse(s)}catch{return null}}).filter(Boolean);
++}
++function collectPeople(){
++  const people=new Map();
++  for(const c of commits())for(const f of tree(c)){
++    if(!/(^|\/)(app\.js|starter-data\.(js|json))$/.test(f.path))continue;
++    for(const d of starterJson(blob(f.sha)))(d.players||[]).forEach(p=>{if(p&&p.name&&!(d.meta&&d.meta.fictional))people.set(p.name,p.id||'')});
++  }
++  return people;
++}
++function readNames(file){
++  const lines=fs.readFileSync(file,'utf8').split('\n').filter(l=>l&&!l.startsWith('regex:')&&!l.startsWith('#')&&l.includes('==>'));
++  return lines.map(l=>l.split('==>')[0]).filter(Boolean);
++}
++function scan(names){
++  const res=names.map(n=>new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'));
++  const perPath={},hitCommits=new Set(),all=commits();
++  for(const c of all)for(const f of tree(c)){if(!TEXT.test(f.path))continue;const s=blob(f.sha);if(res.some(r=>r.test(s))){perPath[f.path]=(perPath[f.path]||0)+1;hitCommits.add(c)}}
++  return {total:all.length,hit:hitCommits.size,perPath};
++}
++function report(r){console.log(`Commits (alle refs): ${r.total}`);console.log(`Commits met spelersgegevens: ${r.hit}`);console.log('Bestanden (aantal commits waarin het bestand namen bevat):');Object.entries(r.perPath).forEach(([p,n])=>console.log(`  ${p}: ${n}`))}
++
++if(mode==='inventaris'){
++  const people=collectPeople();
++  console.log(`Unieke (niet-fictieve) spelers in de historie: ${people.size}`);if(flag('--toon'))console.log([...people.keys()].join('\n'));
++  report(scan([...people.keys(),...[...people.values()].filter(Boolean)]));
++}else if(mode==='vervangbestand'){
++  const uit=opt('--uit');if(!uit)throw new Error('--uit ontbreekt');
++  const abs=path.resolve(uit);if(abs.startsWith(repo+path.sep))throw new Error('Schrijf het vervangbestand BUITEN de repository (het bevat de namen).');
++  const people=[...collectPeople()];
++  const lines=['# Vervangingen voor git filter-repo --replace-text. Bevat echte namen: niet delen, na afloop verwijderen.',
++    'regex:window\\.STARTER_DATA\\s*=\\s*\\{(?![^\\n]{0,200}"fictional":true).*\\};?==>window.STARTER_DATA={"version":2,"meta":{"fictional":true,"note":"uit historie verwijderd"},"players":[],"trainings":[],"matches":[]};'];
++  people.forEach(([name,id],i)=>{const n=String(i+1).padStart(2,'0');lines.push(`${name}==>Verwijderde speler ${n}`);if(id)lines.push(`${id}==>p-verwijderd-${n}`)});
++  fs.writeFileSync(abs,lines.join('\n')+'\n',{mode:0o600});
++  console.log(`Vervangbestand geschreven: ${abs} (${people.length} spelers, ${lines.length-1} regels)`);
++}else if(mode==='controle'){
++  const file=opt('--namen');if(!file)throw new Error('--namen <vervangbestand> ontbreekt');
++  const r=scan(readNames(file));report(r);
++  if(r.hit){console.log('NIET SCHOON: er staan nog spelersgegevens in de historie.');process.exit(1)}
++  console.log('SCHOON: geen van de namen of spelers-id\'s komt nog voor in enige commit.');
++}else if(mode==='site'){
++  const url=opt('--url'),file=opt('--namen');if(!url||!file)throw new Error('--url en --namen zijn verplicht');
++  (async()=>{const base=url.replace(/\/?$/,'/');const html=await (await fetch(base+'index.html',{cache:'no-store'})).text();
++    const src=(html.match(/src="(app\.js[^"]*)"/)||[])[1]||'app.js';const js=await (await fetch(base+src,{cache:'no-store'})).text();
++    const names=readNames(file),hits=names.filter(n=>js.toLowerCase().includes(n.toLowerCase())).length;
++    const fictional=/"fictional":true/.test(js.split('\n')[1]||'');
++    console.log(`Gepubliceerde ${src}: ${hits} namen gevonden; startdata fictief: ${fictional?'ja':'nee'}`);process.exit(hits||!fictional?1:0)})().catch(e=>{console.error(e.message);process.exit(2)});
++}else{
++  console.log('Gebruik: inventaris | vervangbestand --uit PAD | controle --namen PAD | site --url URL --namen PAD   [--repo PAD] [--toon]');process.exit(mode?1:0);
++}
+-- 
+2.43.0
+
+
+From 3f5a73ef002d059e56b538b8e6954aa5e99339d8 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 15:17:06 +0100
+Subject: [PATCH 2/3] Testverslag en vergelijkingsrapport 2.10.1
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ release/TESTVERSLAG.md          | 90 ++++++++++++++++-----------------
+ release/VERGELIJKINGSRAPPORT.md | 33 ++++++++++++
+ 2 files changed, 77 insertions(+), 46 deletions(-)
+ create mode 100644 release/VERGELIJKINGSRAPPORT.md
+
+diff --git a/release/TESTVERSLAG.md b/release/TESTVERSLAG.md
+index 0f22412..cf11066 100644
+--- a/release/TESTVERSLAG.md
++++ b/release/TESTVERSLAG.md
+@@ -1,60 +1,58 @@
+-# Test- en validatierapport — Coach 2.10.0
++# Test- en validatierapport — Coach 2.10.1 (herstelronde)
+ 
+-Datum: 2026-11-08 · Basis: `main@9b74826` · Branch: `verbetering/2.10.0`
+-Omgeving: Linux-container (Anthropic-sandbox), Node.js v22.23.4, PostgreSQL 16.15, Playwright 1.63.0 / Chromium. Netwerk naar Supabase en jsDelivr geblokkeerd.
++Datum: 2026-11-08 · Basis: `verbetering/2.10.0` · Resultaat: `herstel/2.10.1`
++Omgeving: Linux-container, Node.js v22.23.4, PostgreSQL 16.15, git 2.43, git-filter-repo 2.47.0, Playwright 1.63 / Chromium. Netwerk naar Supabase, jsDelivr en GitHub-API geblokkeerd.
+ 
+-## Resultaten
++## Totaal (samengevoegd 2.10.1)
+ 
+-| Suite | Commando | Resultaat | Bewijsniveau |
+-|---|---|---|---|
+-| Syntax | `npm run check` | ✅ geslaagd (app.js, kennis.js, sw.js) | Lokaal |
+-| Node-tests (alle) | `npm test` | ✅ **120/120** geslaagd, 0 mislukt, 0 overgeslagen (≈ 8 s) | Lokaal; CI na push |
+-| Bestaande suite van main (81) met de **originele** harness tegen de nieuwe code | `node --test app.test.js kennis.test.js` | ✅ **81/81** | Lokaal (regressie) |
+-| Gouden vergelijking rekenregels vs 2.9.1 | in `rekenregels.test.js` | ✅ identiek: aanwezigheid (34×team), aanwezigheidsstatistiek (34), trainingstellingen (101), wedstrijdtellingen (5), selectiewaarschuwingen/rugnummers (5), wedstrijdbladmodel (5) | Lokaal |
+-| SQL RLS/Storage | `npm run test:db` | ✅ alle stappen; mutatietest (extra delete-recht, `using(true)`) correct afgekeurd | Lokaal (PostgreSQL + Supabase-nabootsing) |
+-| Chromium | `npm run test:e2e` | ✅ 6/6 stappen | Lokaal (Chromium, mobiel = emulatie) |
+-
+-### Node-tests per bestand
+-
+-| Bestand | Tests | Resultaat |
++| Suite | Resultaat | Bewijsniveau |
+ |---|---|---|
+-| app.test.js (bestaand) | 63 | ✅ |
+-| kennis.test.js (bestaand) | 18 | ✅ |
+-| backup.test.js | 12 | ✅ |
+-| sync.test.js | 9 | ✅ |
+-| ai.test.js | 9 | ✅ |
+-| rekenregels.test.js | 5 | ✅ |
+-| static.test.js | 4 | ✅ |
++| `npm run check` | ✅ | Lokaal |
++| `npm test` (`node --test`, 12 bestanden) | ✅ **161/161**, 0 mislukt, 0 overgeslagen | Lokaal; CI na PR |
++| Originele 81 tests van `main` met originele harness tegen 2.10.1-code | ✅ 81/81 | Lokaal (regressie) |
++| `npm run test:db` | ✅ alle SQL-tests + 24 statuscontroles van het verify-script in 4 scenario's, 0 fouten | Lokaal (PostgreSQL + Supabase-nabootsing) |
++| `npm run test:e2e` | ✅ 7/7 browserstappen (incl. nieuwe AI-preview: geen namen, annuleren = niets verstuurd, versturen = precies 1 verzoek) | Lokaal (Chromium; mobiel = emulatie) |
+ 
+-### Chromium-stappen
++## Per patch, los toegepast op 2.10.0
+ 
+-1. Desktop 1280 px: alle 15 pagina's renderen, geen JavaScript-fouten, `aria-current` correct.
+-2. iPhone 13 (emulatie): onderbalk zichtbaar, geen horizontale overloop op 5 pagina's.
+-3. iPad gen 7 (emulatie): idem.
+-4. XSS: `<img onerror>` in spelersnamen, teamnaam, tegenstander, oefening, trainingsfocus, notitie en kennisartikelen → 0 uitvoeringen op alle pagina's, geen `javascript:`-links. (Detectiemechanisme zelf gecontroleerd: positieve controle geeft 1.)
+-5. Back-up downloaden: bestand bevat `backupMeta`, `knowledgeModule` en trainingen.
+-6. Offline: na eerste bezoek herstart de app zonder netwerk via de service worker; offline-indicator zichtbaar.
++| Patch | `npm test` | Extra |
++|---|---|---|
++| P1 Startdata | ✅ 126/126 | `test:db` ✅ |
++| P2 Supabase-verificatie | ✅ 124/124 | `test:db` ✅ incl. verify-scenario's |
++| P3 Sync-veiligheidsrem | ✅ 142/142 | – |
++| P4 AI-privacy | ✅ 126/126 | – |
++| P1+P2+P3+P4 (drie volgordes) | ✅ 158/158, identieke boom | `test:db` ✅, e2e 6/6 |
+ 
+-### SQL-stappen (lokaal)
++## Mutatietests (tests falen als de beveiliging wordt weggehaald)
+ 
+-- `coach_data_auth`: eigenaar leest/schrijft; insert voor ander account geweigerd; delete geweigerd; eigenaar wijzigen geweigerd; ander account ziet/wijzigt niets; anon leest/schrijft niets; verouderde `updated_at`-update raakt 0 rijen; script idempotent; rollback + opnieuw toepassen werkt.
+-- Huidige `coach-knowledge`-policies (zoals de app ze voorschrijft): anon kan objecten **zien, toevoegen en overschrijven** → risico lokaal aangetoond.
+-- Voorstel 0002: anon niets; ander account niets en kan niet in andermans map schrijven; eigenaar alleen eigen map; rollback en opnieuw toepassen werkt.
++| Ingreep | Gevolg |
++|---|---|
++| Echte naam terug in startdata | `startdata.test.js`: 2 falen |
++| Verify-controle “anon schrijven coach-knowledge” meldt OK i.p.v. RISICO | `test:db` faalt |
++| Extra DELETE-recht / `using (true)` op `coach_data_auth` (uit 2.10.0) | `test:db` faalt |
++| Veiligheidsrem sync uitgeschakeld | `sync-veiligheid.test.js`: 14 falen |
++| Laatste AI-controle uitgeschakeld | `ai-privacy.test.js`: 2 falen |
++| Gezondheidsfilter uitgeschakeld | `ai-privacy.test.js`: 1 faalt |
++| XSS-detectie (positieve controle) | detecteert 1 uitvoering |
+ 
+-## Mislukt / overgeslagen / regressies
++## Git-geschiedenis: lokale proefuitvoering
+ 
+-- Mislukt: geen.
+-- Overgeslagen: geen in de suites. Niet uitgevoerd: zie hieronder.
+-- Regressies: geen gevonden (bestaande 81 tests + gouden vergelijking).
+-- Tijdens ontwikkeling gevonden en opgelost: twee testfouten in nieuwe tests (vergelijking van arrays uit een andere `vm`-realm; verkeerde aanroep `matchPlayerNumber` met id i.p.v. spelerobject). Geen appfouten.
++Op een kopie met 50 commits (36 van `main` + gesimuleerde merges): inventaris 34 spelers in 46 commits → `git filter-repo --sensitive-data-removal --invert-paths --path starter-data.json --path starter-data.js --replace-text` → controle **SCHOON** (0 commits), huidige `app.js` byte-voor-byte gelijk, `npm test` 158/158, geforceerde push naar lokale origin + controle in nieuwe clone SCHOON. Het vervangbestand met namen is daarna verwijderd.
+ 
+-## Niet uitgevoerd (eerlijk)
++## Niet uitgevoerd
+ 
+ | Wat | Waarom |
+ |---|---|
+-| GitHub CI | Niet gepusht (geen directe commits; ZIP-oplevering). Workflow ongewijzigd en draait `npm test`, dus alle nieuwe tests lopen na een PR mee. |
+-| Echte Supabase (auth, RLS, Storage, sync) | Netwerk geblokkeerd en productie mag niet worden aangeraakt. Verificatiescript klaar. |
+-| Echte iPhone/iPad (Safari/WebKit) | Alleen Chromium-emulatie beschikbaar. |
+-| PDF-export wedstrijdblad, PDF/DOCX/XLSX-import | CDN niet bereikbaar; modelniveau gedekt door bestaande tests. |
+-| Ollama met een echt model | Geen model beschikbaar; request/response-formaat volgens officiële documentatie, getest met mock. |
+-| SRI-hashes | CDN niet bereikbaar om hashes te verifiëren. |
++| GitHub CI | Niets gepusht (opdracht). |
++| Productie-Supabase en het verify-script daar | Geen toegang; geen productiewijzigingen toegestaan. |
++| Git-geschiedenis op GitHub herschrijven, Support, Pages-controle | Handmatig door de eigenaar (stappenplan). |
++| Echte iPhone/iPad, echt Ollama-model, CDN-bibliotheken | Niet beschikbaar in de ontwikkelomgeving. |
++
++## Tijdens de ontwikkeling gevonden en opgelost
++
++- Fictieve achternaam “Demo” botste met een tegenstandersnaam → namen gekozen die geen gewone woorden zijn.
++- Eerste versie van het historie-vervangbestand verving ook de nieuwe fictieve startdata (24 tests faalden in de proef) → regel spaart nu `"fictional":true`.
++- Eerste versie van de laatste AI-controle blokkeerde op de vaste instructietekst (“geen medisch advies”) → vaste teksten uitgezonderd.
++- Veiligheidsrem telde registraties van een bewust verwijderde training dubbel → geneste registraties alleen binnen trainingen/wedstrijden die blijven bestaan.
++
++Resultaten van 2.10.0: zie de 2.10.0-ZIP (`release/TESTVERSLAG.md` daar: 120/120, SQL, 6/6 browser).
+diff --git a/release/VERGELIJKINGSRAPPORT.md b/release/VERGELIJKINGSRAPPORT.md
+new file mode 100644
+index 0000000..4abb6a7
+--- /dev/null
++++ b/release/VERGELIJKINGSRAPPORT.md
+@@ -0,0 +1,33 @@
++# Vergelijkingsrapport — Coach 2.10.0 → 2.10.1 (herstelronde)
++
++Basis: `verbetering/2.10.0` (ZIP 2.10.0). Resultaat: `herstel/2.10.1`. Omvang: 40 bestanden, +3.853 / −74 regels (waarvan ca. 3.100 de vervangen startdataregel).
++
++## Per patch
++
++| | P1 Startdata | P2 Supabase-verificatie | P3 Sync-veiligheidsrem | P4 AI-privacy |
++|---|---|---|---|---|
++| **Was (2.10.0)** | 34 echte spelers, 101 trainingen met afwezigheidsredenen (o.a. ziek/blessure) in de publieke `app.js` | Verify-script miste RLS/rechten van `storage.objects`, policies zonder bucketfilter, `vc2` apart, oude tabel `coach_data`; geen samenvatting | Controle op 4 categorieën, alleen op aantallen | Namen gepseudonimiseerd, maar gezondheidsinformatie in vrije tekst ging mee; `confirm()` zonder inzicht |
++| **Wordt (2.10.1)** | 18 fictieve spelers, 26 trainingen, 5 wedstrijden uit een deterministische generator; `meta.fictional` | Alleen-lezen script met samenvatting OK/RISICO/AANDACHT per controle, beide buckets apart; sleutelscan | Alle categorieën, op id; geneste registraties; lege onderdelen; waarschuwing bij ophalen | Gezondheidsvelden weggelaten, vraag geblokkeerd, laatste controle (bij twijfel niets), exacte preview + aparte verzendknop |
++| **Bestanden** | `app.js` (regel 2 + placeholder), `tools/maak-fictieve-startdata.js`, `startdata.test.js`, `rekenregels.test.js` + fixtures, `package.json`, docs | `supabase/verify/verify-production.sql`, `supabase/tests/40_verify_scenario.sh`, `run-local.sh`, `sleutels.test.js`, `package.json`, docs | `app.js` (sync-blok), `sync-veiligheid.test.js`, `package.json`, docs | `app.js` (nieuw AI-blok), `ai-privacy.test.js`, `ai.test.js` (3 tests aangepast), `package.json`, docs |
++| **Nieuwe tests** | 6 | 4 Node + 24 SQL-controles | 22 | 6 (+3 aangepast) |
++| **Mutatietest** | echte naam terug → 2 falen | verify meldt RISICO als OK → faalt | rem uit → 14 falen | eindcontrole uit → 2 falen; filter uit → 1 faalt |
++| **Functioneel risico** | Laag; alleen nieuwe installaties zien andere voorbeelddata | Geen (alleen lezen) | Iets vaker een vraag bij grote opruimacties | Alleen optionele lokale AI |
++| **Los toepasbaar op 2.10.0** | ✅ 126/126 | ✅ 124/124 + SQL | ✅ 142/142 | ✅ 126/126 |
++
++Samen in drie volgordes (1-2-3-4, 4-3-2-1, 2-4-1-3) met `git am -3`: identieke boom, 158/158. De samenvoegcommit (versie 2.10.1, stappenplan, hulpscript, browserstap) brengt het totaal op 161.
++
++## Gedrag dat bewust gelijk blijft
++
++- Alle rekenregels: gouden vergelijking met v2.9.1 (nu op een fictieve dataset; in 2.10.0 ook op de echte startdata) identiek.
++- Bestaande lokale gegevens, back-upformaat, cloudformaat, Supabase-configuratie en productie: ongewijzigd.
++- De originele 81 tests van `main` slagen met de originele harness tegen de 2.10.1-code.
++
++## Gedrag dat verandert voor de gebruiker
++
++| Situatie | 2.10.0 | 2.10.1 |
++|---|---|---|
++| Nieuwe installatie zonder sync/back-up | Echte spelers van Full Speed O23 | Fictieve voorbeeldspelers |
++| “Terug naar startdata” | Echte spelers | Fictieve voorbeeldspelers |
++| Stille sync na het wissen van bijv. 5 notities of een opstelling | Ging stil mee | Wacht op bevestiging |
++| Ophalen uit de cloud | Algemene vraag | Vraag noemt wat lokaal verdwijnt |
++| Coachassistent met lokaal model | `confirm()`; gezondheidsinfo in vrije tekst kon meegaan | Preview met exacte tekst; gezondheidsvelden weggelaten; bij twijfel niets verstuurd |
+-- 
+2.43.0
+
+
+From fc9972068e43e0b2dc63ee4bb0f868cd6c537f03 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 15:22:25 +0100
+Subject: [PATCH 3/3] Documentatie: P1 via generator (geen namen in
+ patchbestanden), regel 1 app.js niet meer wijzigen
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ AGENTS.md                                 |  2 +-
+ docs/RELEASE.md                           |  4 ++--
+ docs/patches/P1-startdata-anonimiseren.md | 12 ++++++++++--
+ release/TESTVERSLAG.md                    |  6 ++++++
+ release/VERGELIJKINGSRAPPORT.md           |  2 +-
+ 5 files changed, 20 insertions(+), 6 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index a61bade..56e1ee0 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -9,7 +9,7 @@ Leidend kader: `personal-ecosystem/CLAUDE.md`, `DECISIONS.md` en `docs/adr/`. Bi
+ 3. Bestaand patroon voor uitbreidingen: een functie in `app.js` uitbreiden door hem te omhullen (`const xBase=x; x=function(){…}`), in een gemarkeerd versieblok vóór `document.addEventListener('click',handleClick)`. Klikhandlers lopen via `handleClick`; die wordt pas daarna geregistreerd.
+ 4. Bestaande gegevens blijven leesbaar: nieuwe velden zijn optioneel en worden in `normalize()` aangevuld; `validateStateData()` mag niet strenger worden voor bestaande back-ups.
+ 5. Kennis & Ontwikkeling (`kennis.js`, sleutel `footballCoachKnowledgeV1`) wordt nooit overschreven of verwijderd door herstel of sync; alleen aangevuld via `kdImport`.
+-6. Versie ophogen = `APP_VERSION` in `app.js`, `?v=` in `index.html`, `CACHE` en `CORE` in `sw.js`, `package.json`, `manifest.json`. `static.test.js` controleert dit.
++6. Versie ophogen = `APP_VERSION` in `app.js` (niet het commentaar op regel 1: dat staat naast de startdata op regel 2 en trekt die regel mee in elke diff/patch), `?v=` in `index.html`, `CACHE` en `CORE` in `sw.js`, `package.json`, `manifest.json`. `static.test.js` controleert dit.
+ 7. Voor elke wijziging tests toevoegen; `npm run check && npm test` moet groen zijn. Bij database/Storage ook `npm run test:db`.
+ 8. Eén onderwerp per PR, eerst een voorstel, nooit zelf mergen (ADR 0011). Geen directe commits naar `main`.
+ 
+diff --git a/docs/RELEASE.md b/docs/RELEASE.md
+index 22d7313..3fe05a0 100644
+--- a/docs/RELEASE.md
++++ b/docs/RELEASE.md
+@@ -5,7 +5,7 @@ Coach wordt als statische site gehost (huidige werkwijze; ecosysteem DEPLOYMENT.
+ ## Checklist
+ 
+ 1. Branch vanaf `main`; één onderwerp per PR (ADR 0011). Voorstel eerst laten goedkeuren.
+-2. Versie ophogen op alle plaatsen: `APP_VERSION` (app.js, 2.10-blok), kopcommentaar app.js, `?v=` in `index.html` (style, app, kennis), `CACHE` + `CORE` in `sw.js`, `package.json`, `manifest.json` (description).
++2. Versie ophogen op alle plaatsen: `APP_VERSION` (app.js, 2.10-blok; regel 1 van app.js niet aanpassen), `?v=` in `index.html` (style, app, kennis), `CACHE` + `CORE` in `sw.js`, `package.json`, `manifest.json` (description).
+ 3. `npm run check && npm test` → groen. `static.test.js` faalt als versies niet gelijk lopen.
+ 4. Bij Supabase-wijzigingen: `npm run test:db`. **Nooit** SQL tegen productie zonder apart akkoord, verse back-up en hersteltest.
+ 5. Optioneel `npm run test:e2e`.
+@@ -24,4 +24,4 @@ Revert de merge-commit en publiceer opnieuw. Gebruikersgegevens staan lokaal en
+ 
+ ## Deze oplevering (2.10.0)
+ 
+-Geleverd als ZIP met per onderwerp een patch in `release/patches/` zodat elk onderwerp als afzonderlijke PR kan worden ingediend. Zie `release/UPLOADMANIFEST.md`.
++Geleverd als ZIP met per onderwerp een patch in `release/patches/2.10.0/` en `release/patches/2.10.1-herstel/`, zodat elk onderwerp als afzonderlijke PR kan worden ingediend. Zie `release/UPLOADMANIFEST.md`. Geen enkel bestand in de ZIP bevat echte spelersgegevens (gescand).
+diff --git a/docs/patches/P1-startdata-anonimiseren.md b/docs/patches/P1-startdata-anonimiseren.md
+index cb43426..e73a570 100644
+--- a/docs/patches/P1-startdata-anonimiseren.md
++++ b/docs/patches/P1-startdata-anonimiseren.md
+@@ -28,6 +28,14 @@ Mutatietest: een echte naam terugzetten → 2 tests falen.
+ - **Lost de historie niet op**: de echte gegevens staan nog in alle 36 commits (ook in `starter-data.json` en `starter-data.js` uit vroege commits). Zie `docs/GIT_GESCHIEDENIS_OPSCHONEN.md`.
+ 
+ ## Implementatie
++Het patchbestand bevat `app.js` **bewust niet**: een patch die regel 2 vervangt, moet de oude regel met de echte namen bevatten. De nieuwe regel wordt daarom door de generator geschreven.
+ 1. Back-up downloaden op elk apparaat dat Coach gebruikt.
+-2. `git am -3 release/patches/P1-*.patch` op een branch vanaf 2.10.0, `npm test`, PR, review, merge door eigenaar.
+-3. Direct daarna het stappenplan voor de Git-geschiedenis uitvoeren.
++2. Op een branch vanaf 2.10.0:
++   ```bash
++   git am -3 release/patches/2.10.1-herstel/P1-startdata-anonimiseren.patch
++   node tools/maak-fictieve-startdata.js --schrijf      # schrijft regel 2 en het zoekvoorbeeld
++   git commit --amend -a --no-edit
++   npm test                                            # 126/126
++   ```
++3. PR, review, merge door de eigenaar. Let op: de PR-diff op GitHub toont de verwijderde regel (met namen) — die verdwijnt pas na het opschonen van de geschiedenis (stap 7 van het stappenplan: GitHub Support verwijdert ook PR-verwijzingen).
++4. Direct daarna het stappenplan voor de Git-geschiedenis uitvoeren.
+diff --git a/release/TESTVERSLAG.md b/release/TESTVERSLAG.md
+index cf11066..8e6f21b 100644
+--- a/release/TESTVERSLAG.md
++++ b/release/TESTVERSLAG.md
+@@ -39,6 +39,12 @@ Omgeving: Linux-container, Node.js v22.23.4, PostgreSQL 16.15, git 2.43, git-fil
+ 
+ Op een kopie met 50 commits (36 van `main` + gesimuleerde merges): inventaris 34 spelers in 46 commits → `git filter-repo --sensitive-data-removal --invert-paths --path starter-data.json --path starter-data.js --replace-text` → controle **SCHOON** (0 commits), huidige `app.js` byte-voor-byte gelijk, `npm test` 158/158, geforceerde push naar lokale origin + controle in nieuwe clone SCHOON. Het vervangbestand met namen is daarna verwijderd.
+ 
++## Patchbestanden en privacy
++
++- Alle 14 patchbestanden en alle repositorybestanden zijn gescand op de 34 echte namen en spelers-id's (lijst alleen in het geheugen, uit `main`): **0 treffers**.
++- Daarvoor is de reeks opnieuw opgebouwd: regel 1 van `app.js` wordt niet meer gewijzigd (die wijziging trok de startdataregel als context mee in patch 0004 van 2.10.0), P1 bevat `app.js` niet (generator schrijft de regel), en per ongeluk meegecommitte losse patchbestanden zijn verwijderd.
++- Workflow nagespeeld vanaf `main`: 9 patches 2.10.0 → 120/120 en identieke boom; P1 (+ generator) → 126/126, identieke boom; P2/P3/P4 los → 124/142/126; alles + P5 → 161/161 en identieke boom met de opgeleverde code.
++
+ ## Niet uitgevoerd
+ 
+ | Wat | Waarom |
+diff --git a/release/VERGELIJKINGSRAPPORT.md b/release/VERGELIJKINGSRAPPORT.md
+index 4abb6a7..a458931 100644
+--- a/release/VERGELIJKINGSRAPPORT.md
++++ b/release/VERGELIJKINGSRAPPORT.md
+@@ -8,7 +8,7 @@ Basis: `verbetering/2.10.0` (ZIP 2.10.0). Resultaat: `herstel/2.10.1`. Omvang: 4
+ |---|---|---|---|---|
+ | **Was (2.10.0)** | 34 echte spelers, 101 trainingen met afwezigheidsredenen (o.a. ziek/blessure) in de publieke `app.js` | Verify-script miste RLS/rechten van `storage.objects`, policies zonder bucketfilter, `vc2` apart, oude tabel `coach_data`; geen samenvatting | Controle op 4 categorieën, alleen op aantallen | Namen gepseudonimiseerd, maar gezondheidsinformatie in vrije tekst ging mee; `confirm()` zonder inzicht |
+ | **Wordt (2.10.1)** | 18 fictieve spelers, 26 trainingen, 5 wedstrijden uit een deterministische generator; `meta.fictional` | Alleen-lezen script met samenvatting OK/RISICO/AANDACHT per controle, beide buckets apart; sleutelscan | Alle categorieën, op id; geneste registraties; lege onderdelen; waarschuwing bij ophalen | Gezondheidsvelden weggelaten, vraag geblokkeerd, laatste controle (bij twijfel niets), exacte preview + aparte verzendknop |
+-| **Bestanden** | `app.js` (regel 2 + placeholder), `tools/maak-fictieve-startdata.js`, `startdata.test.js`, `rekenregels.test.js` + fixtures, `package.json`, docs | `supabase/verify/verify-production.sql`, `supabase/tests/40_verify_scenario.sh`, `run-local.sh`, `sleutels.test.js`, `package.json`, docs | `app.js` (sync-blok), `sync-veiligheid.test.js`, `package.json`, docs | `app.js` (nieuw AI-blok), `ai-privacy.test.js`, `ai.test.js` (3 tests aangepast), `package.json`, docs |
++| **Bestanden** | `app.js` (regel 2 + zoekvoorbeeld; via `node tools/maak-fictieve-startdata.js --schrijf`, niet in het patchbestand), `tools/maak-fictieve-startdata.js`, `startdata.test.js`, `rekenregels.test.js` + fixtures, `package.json`, docs | `supabase/verify/verify-production.sql`, `supabase/tests/40_verify_scenario.sh`, `run-local.sh`, `sleutels.test.js`, `package.json`, docs | `app.js` (sync-blok), `sync-veiligheid.test.js`, `package.json`, docs | `app.js` (nieuw AI-blok), `ai-privacy.test.js`, `ai.test.js` (3 tests aangepast), `package.json`, docs |
+ | **Nieuwe tests** | 6 | 4 Node + 24 SQL-controles | 22 | 6 (+3 aangepast) |
+ | **Mutatietest** | echte naam terug → 2 falen | verify meldt RISICO als OK → faalt | rem uit → 14 falen | eindcontrole uit → 2 falen; filter uit → 1 faalt |
+ | **Functioneel risico** | Laag; alleen nieuwe installaties zien andere voorbeelddata | Geen (alleen lezen) | Iets vaker een vraag bij grote opruimacties | Alleen optionele lokale AI |
+-- 
+2.43.0
+

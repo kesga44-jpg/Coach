@@ -7,6 +7,13 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
 - CI: `.github/workflows/tests.yml` draait `npm run check` en `npm test` (Node.js 22, Ubuntu 24.04) bij elke pull request en push naar `main`. Alleen leesrechten, geen secrets, geen Supabase-verbinding.
 
+### Coach main 2.10.0 — back-up incl. kennis, veilige autosync, privacy coachassistent
+Overzicht en documentatie: [README.md](README.md) en `docs/`. Wijzigingen: [CHANGELOG.md](CHANGELOG.md).
+- Back-up bevat nu ook Kennis & Ontwikkeling; herstel vult kennis alleen aan (nooit overschrijven/verwijderen) en behoudt kennisbankkoppelingen.
+- Autosync uploadt lokale wijzigingen zonder valse conflicten zolang de cloud niet door een ander apparaat is gewijzigd; veiligheidsrem bij opvallend minder gegevens.
+- Coachassistent: alleen lokale AI (bijv. Ollama), gepseudonimiseerd, bevestiging per verzending; zonder endpoint regelgebaseerd.
+- pdf.js zonder eval, toegankelijkheid, service worker 2.10.0, uitgebreide regressietests.
+
 ### Coach main 2.9.1 — wedstrijdblad altijd één A4-pagina
 - Het A4-PDF past het volledige wedstrijdblad, inclusief selectie en overige categorieën, automatisch op één staande pagina. Bij meer inhoud wordt de bladinhoud proportioneel verkleind in plaats van naar een tweede pagina te lopen of informatie af te breken. De WhatsApp-afbeelding blijft een verticale PNG van circa 4:5.
 - Beide exports gebruiken hetzelfde gegevensmodel (`matchSheetModel`) en worden bij het klikken opnieuw opgebouwd uit de actuele wedstrijd. Rugnummer en naam staan in aparte kolommen, de volgorde volgt het wedstrijdformulier; doorgeschoven (1e / ander team), geblesseerde en afwezige spelers staan in aparte onderdelen en komen nooit dubbel voor. Lege onderdelen worden verborgen.
@@ -70,4 +77,4 @@ Legenda: ✅ bestaat · 🟡 gedeeltelijk · ⬜ nog te bouwen
 - Supabase: URL/key, tabel `coach_data_auth`, RLS, bucket `vc2` en map `VC2` verifiëren zodra netwerk beschikbaar is.
 
 ## Kennis & Ontwikkeling (Meer → Kennis & Ontwikkeling)
-Zelfstandige module in `kennis.js`. Opslag in een eigen localStorage-sleutel `footballCoachKnowledgeV1` (met laatste-versie-kopie in `footballCoachKnowledgeBackupV1`). `state`, `state.teams`, `save()`, `normalize()`, `validateStateData()`, back-up/herstel en Supabase-sync zijn niet gewijzigd. Let op: kennis wordt daarom **niet** meegenomen in de bestaande back-up of cloud-sync; gebruik "Kennis exporteren" in de module voor een eigen back-up. Tests: `npm test` (`kennis.test.js`).
+Zelfstandige module in `kennis.js`. Opslag in een eigen localStorage-sleutel `footballCoachKnowledgeV1` (met laatste-versie-kopie in `footballCoachKnowledgeBackupV1`). `state`, `state.teams`, `save()`, `normalize()`, `validateStateData()`, back-up/herstel en Supabase-sync zijn niet gewijzigd. Sinds 2.10.0 wordt kennis wél meegenomen in de back-up (veld `knowledgeModule`) en bij herstel alleen aangevuld; niet in de cloud-sync. "Kennis exporteren" blijft beschikbaar. Tests: `npm test` (`kennis.test.js`).

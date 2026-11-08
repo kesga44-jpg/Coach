@@ -1,0 +1,81 @@
+From be9c5d2fed913e3cb966c186a9f8179b8b4fb97d Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:33:44 +0100
+Subject: [PATCH 9/9] Testverslag 2.10.0
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ release/TESTVERSLAG.md | 60 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 60 insertions(+)
+ create mode 100644 release/TESTVERSLAG.md
+
+diff --git a/release/TESTVERSLAG.md b/release/TESTVERSLAG.md
+new file mode 100644
+index 0000000..0f22412
+--- /dev/null
++++ b/release/TESTVERSLAG.md
+@@ -0,0 +1,60 @@
++# Test- en validatierapport — Coach 2.10.0
++
++Datum: 2026-11-08 · Basis: `main@9b74826` · Branch: `verbetering/2.10.0`
++Omgeving: Linux-container (Anthropic-sandbox), Node.js v22.23.4, PostgreSQL 16.15, Playwright 1.63.0 / Chromium. Netwerk naar Supabase en jsDelivr geblokkeerd.
++
++## Resultaten
++
++| Suite | Commando | Resultaat | Bewijsniveau |
++|---|---|---|---|
++| Syntax | `npm run check` | ✅ geslaagd (app.js, kennis.js, sw.js) | Lokaal |
++| Node-tests (alle) | `npm test` | ✅ **120/120** geslaagd, 0 mislukt, 0 overgeslagen (≈ 8 s) | Lokaal; CI na push |
++| Bestaande suite van main (81) met de **originele** harness tegen de nieuwe code | `node --test app.test.js kennis.test.js` | ✅ **81/81** | Lokaal (regressie) |
++| Gouden vergelijking rekenregels vs 2.9.1 | in `rekenregels.test.js` | ✅ identiek: aanwezigheid (34×team), aanwezigheidsstatistiek (34), trainingstellingen (101), wedstrijdtellingen (5), selectiewaarschuwingen/rugnummers (5), wedstrijdbladmodel (5) | Lokaal |
++| SQL RLS/Storage | `npm run test:db` | ✅ alle stappen; mutatietest (extra delete-recht, `using(true)`) correct afgekeurd | Lokaal (PostgreSQL + Supabase-nabootsing) |
++| Chromium | `npm run test:e2e` | ✅ 6/6 stappen | Lokaal (Chromium, mobiel = emulatie) |
++
++### Node-tests per bestand
++
++| Bestand | Tests | Resultaat |
++|---|---|---|
++| app.test.js (bestaand) | 63 | ✅ |
++| kennis.test.js (bestaand) | 18 | ✅ |
++| backup.test.js | 12 | ✅ |
++| sync.test.js | 9 | ✅ |
++| ai.test.js | 9 | ✅ |
++| rekenregels.test.js | 5 | ✅ |
++| static.test.js | 4 | ✅ |
++
++### Chromium-stappen
++
++1. Desktop 1280 px: alle 15 pagina's renderen, geen JavaScript-fouten, `aria-current` correct.
++2. iPhone 13 (emulatie): onderbalk zichtbaar, geen horizontale overloop op 5 pagina's.
++3. iPad gen 7 (emulatie): idem.
++4. XSS: `<img onerror>` in spelersnamen, teamnaam, tegenstander, oefening, trainingsfocus, notitie en kennisartikelen → 0 uitvoeringen op alle pagina's, geen `javascript:`-links. (Detectiemechanisme zelf gecontroleerd: positieve controle geeft 1.)
++5. Back-up downloaden: bestand bevat `backupMeta`, `knowledgeModule` en trainingen.
++6. Offline: na eerste bezoek herstart de app zonder netwerk via de service worker; offline-indicator zichtbaar.
++
++### SQL-stappen (lokaal)
++
++- `coach_data_auth`: eigenaar leest/schrijft; insert voor ander account geweigerd; delete geweigerd; eigenaar wijzigen geweigerd; ander account ziet/wijzigt niets; anon leest/schrijft niets; verouderde `updated_at`-update raakt 0 rijen; script idempotent; rollback + opnieuw toepassen werkt.
++- Huidige `coach-knowledge`-policies (zoals de app ze voorschrijft): anon kan objecten **zien, toevoegen en overschrijven** → risico lokaal aangetoond.
++- Voorstel 0002: anon niets; ander account niets en kan niet in andermans map schrijven; eigenaar alleen eigen map; rollback en opnieuw toepassen werkt.
++
++## Mislukt / overgeslagen / regressies
++
++- Mislukt: geen.
++- Overgeslagen: geen in de suites. Niet uitgevoerd: zie hieronder.
++- Regressies: geen gevonden (bestaande 81 tests + gouden vergelijking).
++- Tijdens ontwikkeling gevonden en opgelost: twee testfouten in nieuwe tests (vergelijking van arrays uit een andere `vm`-realm; verkeerde aanroep `matchPlayerNumber` met id i.p.v. spelerobject). Geen appfouten.
++
++## Niet uitgevoerd (eerlijk)
++
++| Wat | Waarom |
++|---|---|
++| GitHub CI | Niet gepusht (geen directe commits; ZIP-oplevering). Workflow ongewijzigd en draait `npm test`, dus alle nieuwe tests lopen na een PR mee. |
++| Echte Supabase (auth, RLS, Storage, sync) | Netwerk geblokkeerd en productie mag niet worden aangeraakt. Verificatiescript klaar. |
++| Echte iPhone/iPad (Safari/WebKit) | Alleen Chromium-emulatie beschikbaar. |
++| PDF-export wedstrijdblad, PDF/DOCX/XLSX-import | CDN niet bereikbaar; modelniveau gedekt door bestaande tests. |
++| Ollama met een echt model | Geen model beschikbaar; request/response-formaat volgens officiële documentatie, getest met mock. |
++| SRI-hashes | CDN niet bereikbaar om hashes te verifiëren. |
+-- 
+2.43.0
+

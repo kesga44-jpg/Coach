@@ -1,5 +1,5 @@
-const CACHE='football-coach-v2.9.1-kd1';
-const CORE=['./','./index.html','./style.css?v=2.9.1','./app.js?v=2.9.1','./kennis.js?v=1','./manifest.json','./icon-192.png','./icon-512.png'];
+const CACHE='football-coach-v2.10.1';
+const CORE=['./','./index.html','./style.css?v=2.10.1','./app.js?v=2.10.1','./kennis.js?v=3','./manifest.json','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(
@@ -24,6 +24,7 @@ self.addEventListener('fetch',event=>{
   if(
     url.origin===location.origin &&
     (url.pathname.endsWith('/app.js') ||
+     url.pathname.endsWith('/kennis.js') ||
      url.pathname.endsWith('/style.css') ||
      url.pathname.endsWith('/index.html'))
   ){

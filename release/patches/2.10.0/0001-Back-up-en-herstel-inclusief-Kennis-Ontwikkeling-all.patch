@@ -1,0 +1,296 @@
+From 23ec44bab7e7be2e3054b998d63e8c88c30f2969 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:20:11 +0100
+Subject: [PATCH 1/9] Back-up en herstel inclusief Kennis & Ontwikkeling
+ (alleen aanvullen, nooit overschrijven)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ app.js         | 115 +++++++++++++++++++++++++++++++++++++++++++++
+ backup.test.js | 125 +++++++++++++++++++++++++++++++++++++++++++++++++
+ harness.js     |   2 +-
+ package.json   |   2 +-
+ 4 files changed, 242 insertions(+), 2 deletions(-)
+ create mode 100644 backup.test.js
+
+diff --git a/app.js b/app.js
+index 8ae0808..19251c7 100644
+--- a/app.js
++++ b/app.js
+@@ -1767,6 +1767,121 @@ handleClick=function(e){
+   }
+   return handleClickLegacy(e);
+ };
++/* ==== Coach main 2.10.0 — uitbreidingen (vóór het registreren van de klikhandler) ==== */
++/* -- 2.10 · Back-up en herstel inclusief Kennis & Ontwikkeling --
++   Formaat: de bestaande state-JSON blijft de basis (oudere app-versies kunnen het bestand dus nog lezen).
++   Nieuw zijn twee optionele velden: backupMeta (herkenning/versie) en knowledgeModule (Kennis-export, zelfde
++   formaat als "Kennis exporteren"). Herstel vervangt de teamgegevens zoals voorheen, maar:
++   - Kennis & Ontwikkeling wordt alleen AANGEVULD (dubbelen worden overgeslagen), nooit overschreven of verwijderd;
++   - koppelingen naar versleutelde kennisbankoriginelen (knowledgeFiles) die lokaal bekend zijn blijven behouden. */
++const APP_VERSION='2.10.0';
++const BACKUP_FORMAT='football_coach_backup';
++const BACKUP_FORMAT_VERSION=2;
++const BACKUP_MAX_BYTES=25*1024*1024;
++function mergeKnowledgeFiles(current,incoming){
++  const out={};
++  const put=(id,meta)=>{if(!meta||typeof meta!=='object'||Array.isArray(meta))return;const prev=out[id];if(!prev||String(meta.uploadedAt||'')>String(prev.uploadedAt||''))out[id]=clone(meta)};
++  Object.entries(current||{}).forEach(([id,m])=>put(id,m));
++  Object.entries(incoming||{}).forEach(([id,m])=>put(id,m));
++  return out;
++}
++function buildFullBackup(){
++  const data=clone(state);
++  delete data.backupMeta;delete data.knowledgeModule;
++  data.backupMeta={format:BACKUP_FORMAT,version:BACKUP_FORMAT_VERSION,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),contains:['teamgegevens','knowledgeFiles (alleen koppelingen)']};
++  const kd=typeof kdRead==='function'?kdRead():null;
++  if(kd&&!kd.error){data.knowledgeModule=kdExportPayload(kd.store);data.backupMeta.contains.push('Kennis & Ontwikkeling')}
++  else if(kd&&kd.error)data.backupMeta.knowledgeModuleError=kd.error;
++  return data;
++}
++/* Zuivere functie: bepaalt wat een herstel zou doen, zonder iets op te slaan. Gooit een fout bij ongeldige invoer. */
++function backupRestorePlan(raw,current=state,kdStore=null){
++  if(raw&&typeof raw==='object'&&!Array.isArray(raw)&&raw.format===KD_EXPORT_FORMAT)throw new Error('Dit is een Kennis-export. Importeer die via Meer → Kennis & Ontwikkeling → Importeren.');
++  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw new Error('Back-up moet een JSON-object zijn');
++  const {backupMeta,knowledgeModule,...rest}=raw;
++  const data=validateStateData(clone(rest));
++  const warnings=[];
++  const meta=backupMeta&&typeof backupMeta==='object'&&!Array.isArray(backupMeta)?backupMeta:null;
++  if(meta&&meta.format===BACKUP_FORMAT&&Number(meta.version)>BACKUP_FORMAT_VERSION)warnings.push(`Deze back-up komt uit een nieuwere app-versie (${meta.appVersion||'onbekend'}); onbekende onderdelen worden bewaard maar mogelijk niet gebruikt.`);
++  data.knowledgeFiles=mergeKnowledgeFiles(current?.knowledgeFiles,data.knowledgeFiles);
++  let knowledge=null,knowledgeSummary={updates:0,items:0,newItems:0,duplicates:0,error:''};
++  if(knowledgeModule!==undefined){
++    if(!knowledgeModule||typeof knowledgeModule!=='object'||knowledgeModule.format!==KD_EXPORT_FORMAT||!Array.isArray(knowledgeModule.updates)){knowledgeSummary.error='Het kennisonderdeel van deze back-up is ongeldig en wordt overgeslagen.'}
++    else{
++      knowledge=knowledgeModule;
++      knowledgeSummary.updates=knowledgeModule.updates.length;
++      knowledgeSummary.items=knowledgeModule.updates.reduce((n,u)=>n+(Array.isArray(u?.items)?u.items.length:0),0);
++      if(kdStore){const p=kdParse(JSON.stringify(knowledgeModule),kdStore);if(p.ok){knowledgeSummary.newItems=p.newItems.length;knowledgeSummary.duplicates=p.duplicates.length}else knowledgeSummary.error=p.errors[0]||'Kennisonderdeel kan niet worden gelezen'}
++    }
++  }
++  if(knowledgeSummary.error)warnings.push(knowledgeSummary.error);
++  const count=k=>Array.isArray(data[k])?data[k].length:0;
++  return {data,knowledge,legacy:!meta,meta,warnings,knowledgeSummary,
++    summary:{players:count('players'),trainings:count('trainings'),matches:count('matches'),exercises:count('exercises'),teams:count('teams'),linkedKnowledgeFiles:Object.keys(data.knowledgeFiles||{}).length}};
++}
++function backupConfirmText(plan){
++  const s=plan.summary,k=plan.knowledgeSummary;
++  const lines=[
++    `Back-up ${plan.legacy?'(ouder formaat, zonder kennisonderdeel)':`van ${plan.meta?.exportedAt?new Date(plan.meta.exportedAt).toLocaleString('nl-NL'):'onbekende datum'} (app ${plan.meta?.appVersion||'?'})`}`,
++    `Bevat: ${s.teams} team(s), ${s.players} spelers, ${s.trainings} trainingen, ${s.matches} wedstrijden, ${s.exercises} oefeningen.`,
++    '',
++    'Deze teamgegevens VERVANGEN de huidige lokale teamgegevens. De huidige versie wordt eerst als herstelpunt bewaard.',
++    `Gekoppelde kennisbankoriginelen blijven behouden (${s.linkedKnowledgeFiles} koppeling(en) na herstel).`,
++    plan.knowledge?`Kennis & Ontwikkeling wordt AANGEVULD: ${k.newItems} nieuw, ${k.duplicates} al aanwezig. Bestaande kennis wordt nooit overschreven of verwijderd.`:'Kennis & Ontwikkeling blijft ongewijzigd.'
++  ];
++  if(plan.warnings.length)lines.push('','Let op: '+plan.warnings.join(' '));
++  lines.push('','Doorgaan?');
++  return lines.join('\n');
++}
++exportBackup=function(){
++  if(storageLoadError){toast('Back-up niet gemaakt: herstel eerst de ongeldige bestaande opslag');return false}
++  try{
++    state.meta.lastManualBackupAt=new Date().toISOString();
++    localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
++    const data=buildFullBackup();
++    downloadJson(data,`football-coach-backup-${TODAY()}.json`);
++    renderPage();
++    const n=data.knowledgeModule?data.knowledgeModule.updates.reduce((a,u)=>a+u.items.length,0):0;
++    toast(data.backupMeta.knowledgeModuleError?'Back-up gedownload, maar ZONDER kennis: '+data.backupMeta.knowledgeModuleError:`Back-up gedownload (inclusief ${n} kennisartikel${n===1?'':'en'})`);
++    return data;
++  }catch(e){toast('Back-up maken mislukt: '+e.message);return false}
++};
++importBackup=async function(file){
++  const previousState=state,previousTeamId=ui.teamId;
++  let plan;
++  try{
++    if(file&&file.size>BACKUP_MAX_BYTES)throw new Error('bestand is groter dan 25 MB');
++    let raw;try{raw=JSON.parse(await file.text())}catch{throw new Error('bestand is geen geldige JSON')}
++    const kd=kdRead();
++    plan=backupRestorePlan(raw,state,kd.error?null:kd.store);
++    if(kd.error&&plan.knowledge){plan.warnings.push('Opgeslagen kennisgegevens zijn onleesbaar; het kennisonderdeel wordt overgeslagen.');plan.knowledge=null}
++  }catch(e){toast(`Back-up niet toegepast: ${e.message||'bestand kan niet worden gelezen'}`);return {ok:false,error:e.message}}
++  if(!confirm(backupConfirmText(plan)))return {ok:false,cancelled:true};
++  try{
++    const previousRaw=localStorage.getItem(STORAGE_KEY)??localStorage.getItem(LEGACY_STORAGE_KEY);
++    state=clone(plan.data);
++    normalize();
++    state.meta.updatedAt=new Date().toISOString();
++    state.meta.lastRestoreAt=state.meta.updatedAt;
++    const serialized=JSON.stringify(state);
++    localStorage.setItem(RECOVERY_BACKUP_KEY,JSON.stringify({at:new Date().toISOString(),raw:previousRaw??JSON.stringify(previousState),state:storageLoadError?null:clone(previousState)}));
++    localStorage.setItem(STORAGE_KEY,serialized);
++    storageLoadError=null;freshInstall=false;
++    if(typeof clearSyncBase==='function')clearSyncBase();
++  }catch(e){
++    state=previousState;ui.teamId=previousTeamId;
++    toast(`Back-up niet toegepast: ${e.message||'opslaan mislukt'}; bestaande gegevens zijn behouden`);
++    return {ok:false,error:e.message};
++  }
++  let kdResult=null,msg='Back-up gevalideerd en hersteld';
++  if(plan.knowledge){
++    kdResult=kdImport(JSON.stringify(plan.knowledge));
++    msg+=kdResult.ok?` · kennis: ${kdResult.added} toegevoegd, ${kdResult.duplicates} al aanwezig`:` · kennis NIET aangevuld (${(kdResult.errors||[])[0]||'onbekende fout'}); teamgegevens zijn wel hersteld`;
++  }
++  renderPage();toast(msg);
++  return {ok:true,knowledge:kdResult,summary:plan.summary};
++};
++/* @@2.10-SECTIONS@@ */
+ document.addEventListener('click',handleClick);
+ $('#quickAdd').onclick=()=>{if(ui.page==='players')editPlayer();else if(ui.page==='matches')editMatch();else if(ui.page==='exercises')editExercise();else if(ui.page==='notes')editNote();else if(ui.page==='tactics')editTactic();else openTrainingTemplateChooser()};
+ $('#importFile').onchange=e=>{const f=e.target.files[0];if(f)importBackup(f);e.target.value=''};
+diff --git a/backup.test.js b/backup.test.js
+new file mode 100644
+index 0000000..e26e028
+--- /dev/null
++++ b/backup.test.js
+@@ -0,0 +1,125 @@
++// Regressietests 2.10: back-up en herstel inclusief Kennis & Ontwikkeling.
++// Kern: teamgegevens worden zoals voorheen vervangen (met herstelpunt), kennis wordt alleen aangevuld.
++const test=require('node:test'),assert=require('node:assert');
++const {createApp}=require('./harness.js');
++const V2='footballCoachDataV2',KD='footballCoachKnowledgeV1',KDB='footballCoachKnowledgeBackupV1',REC='footballCoachRecoveryBackupV1';
++
++const update=(title,items)=>({schema_version:'1.0',record_type:'football_knowledge_update',title,update_date:'2026-10-01',team_context:'Full Speed O23',summary:'Samenvatting',items});
++const item=(t,doi)=>({title:t,source:`Tijdschrift https://doi.org/10.1000/${doi}`,key_findings:'Bevinding',practical_translation:'Doen'});
++const file=obj=>{const txt=typeof obj==='string'?obj:JSON.stringify(obj);return {size:Buffer.byteLength(txt),text:async()=>txt}};
++function appWithKennis(updates,opts={}){
++  const a=createApp(opts);
++  updates.forEach(u=>{const r=a.t.kd.kdImport(JSON.stringify(u));assert.ok(r.ok,JSON.stringify(r))});
++  return a;
++}
++const kdItems=a=>JSON.parse(a.ls.data[KD]).items.map(i=>i.raw.title).sort();
++
++test('back-up bevat teamgegevens, backupMeta en het kennisonderdeel; state zelf blijft schoon',()=>{
++  const a=appWithKennis([update('U1',[item('Sprint','a1'),item('Rondo','a2')])]);
++  const b=a.t.buildFullBackup();
++  assert.strictEqual(b.backupMeta.format,a.t.BACKUP_FORMAT);
++  assert.strictEqual(b.backupMeta.appVersion,a.t.APP_VERSION);
++  assert.strictEqual(b.knowledgeModule.format,a.t.kd.KD_EXPORT_FORMAT);
++  assert.strictEqual(b.knowledgeModule.updates[0].items.length,2);
++  assert.strictEqual(b.players.length,a.t.state.players.length);
++  assert.strictEqual(b.trainings.length,a.t.state.trainings.length);
++  assert.ok(!('backupMeta' in a.t.state)&&!('knowledgeModule' in a.t.state));
++  a.t.validateStateData(b); // blijft leesbaar voor de bestaande validatie (oudere app-versies)
++});
++
++test('herstel: teamgegevens vervangen met herstelpunt; kennis alleen aangevuld (unie, geen verwijdering, geen dubbelen)',async()=>{
++  const src=appWithKennis([update('U1',[item('Sprint','a1'),item('Rondo','a2')])]);
++  src.t.state.team.name='Uit back-up';const backup=src.t.buildFullBackup();
++  const dst=appWithKennis([update('Eigen',[item('Rondo','a2'),item('Alleen hier','b9')])]);
++  const before=dst.ls.data[V2];
++  const r=await dst.t.importBackup(file(backup));
++  assert.ok(r.ok);
++  assert.strictEqual(dst.t.state.team.name,'Uit back-up');
++  assert.strictEqual(JSON.parse(dst.ls.data[REC]).raw,before,'herstelpunt bevat vorige lokale versie');
++  assert.deepStrictEqual(kdItems(dst),['Alleen hier','Rondo','Sprint']);
++  assert.strictEqual(r.knowledge.added,1);assert.strictEqual(r.knowledge.duplicates,1);
++  assert.ok(dst.ls.data[KDB],'kennis heeft eigen laatste-versie-kopie');
++  // tweede keer herstellen: niets dubbel
++  await dst.t.importBackup(file(backup));
++  assert.deepStrictEqual(kdItems(dst),['Alleen hier','Rondo','Sprint']);
++});
++
++test('herstel van oude back-up (zonder kennisonderdeel) laat kennis byte-voor-byte ongemoeid',async()=>{
++  const dst=appWithKennis([update('Eigen',[item('X','c1')])]),kdBefore=dst.ls.data[KD];
++  const old=JSON.parse(createApp().ls.data[V2]);old.team.name='Oude back-up';
++  const r=await dst.t.importBackup(file(old));
++  assert.ok(r.ok);assert.strictEqual(r.knowledge,null);
++  assert.strictEqual(dst.t.state.team.name,'Oude back-up');
++  assert.strictEqual(dst.ls.data[KD],kdBefore);
++});
++
++test('herstel van minimale/zeer oude back-up wordt aangevuld door normalize',async()=>{
++  const a=createApp();
++  const r=await a.t.importBackup(file({players:[{id:'p1',name:'Jan de Vries'}],trainings:[{id:'t1',date:'2026-09-01',attendance:{p1:'Aanwezig'}}]}));
++  assert.ok(r.ok);
++  const p=a.t.state.players[0];
++  assert.strictEqual(p.firstName,'Jan');assert.strictEqual(p.lastName,'de Vries');
++  assert.ok(Array.isArray(p.teamIds)&&p.teamIds.length===1);
++  assert.strictEqual(a.t.state.trainings[0].attendance.p1,'Aanwezig');
++  assert.ok(Array.isArray(a.t.state.trainings[0].guestPlayers));
++});
++
++test('kennisbankkoppelingen (knowledgeFiles) blijven behouden; nieuwste uploadedAt wint',()=>{
++  const a=createApp();
++  const merged=a.t.mergeKnowledgeFiles({k1:{name:'nieuw.pdf',uploadedAt:'2026-10-02T00:00:00Z'},k3:{name:'alleen-lokaal.pdf',uploadedAt:'2026-01-01T00:00:00Z'}},{k1:{name:'oud.pdf',uploadedAt:'2026-09-01T00:00:00Z'},k2:{name:'uit-backup.pdf',uploadedAt:'2026-09-01T00:00:00Z'}});
++  assert.deepStrictEqual(Object.keys(merged).sort(),['k1','k2','k3']);
++  assert.strictEqual(merged.k1.name,'nieuw.pdf');
++});
++
++test('ongeldige invoer: geen JSON, Kennis-export, ongeldige structuur en annuleren wijzigen niets',async()=>{
++  const a=appWithKennis([update('Eigen',[item('X','c1')])]),v2=a.ls.data[V2],kd=a.ls.data[KD];
++  for(const f of [file('{kapot'),file({format:a.t.kd.KD_EXPORT_FORMAT,version:1,updates:[]}),file({players:'geen lijst'}),file([])]){
++    const r=await a.t.importBackup(f);assert.strictEqual(r.ok,false);
++  }
++  assert.ok(a.toasts.some(m=>/Kennis-export/.test(m)));
++  const b=createApp({confirmAnswer:false});const bv2=b.ls.data[V2];
++  const r=await b.t.importBackup(file(a.t.buildFullBackup()));
++  assert.ok(r.cancelled);assert.strictEqual(b.ls.data[V2],bv2);
++  assert.strictEqual(a.ls.data[V2],v2);assert.strictEqual(a.ls.data[KD],kd);
++});
++
++test('ongeldig kennisonderdeel: teamgegevens worden hersteld, kennis blijft ongemoeid en er is een waarschuwing',async()=>{
++  const a=appWithKennis([update('Eigen',[item('X','c1')])]),kd=a.ls.data[KD];
++  const backup=a.t.buildFullBackup();backup.knowledgeModule={format:'iets anders'};backup.team.name='Hersteld';
++  let msg='';a.sandbox.confirm=m=>{msg=m;return true};
++  const r=await a.t.importBackup(file(backup));
++  assert.ok(r.ok);assert.strictEqual(a.t.state.team.name,'Hersteld');assert.strictEqual(a.ls.data[KD],kd);
++  assert.ok(/ongeldig/.test(msg));
++});
++
++test('onleesbare lokale kennisopslag wordt nooit overschreven bij herstel',async()=>{
++  const src=appWithKennis([update('U1',[item('Sprint','a1')])]),backup=src.t.buildFullBackup();
++  const a=createApp({store:{[KD]:'{kapot'}});
++  const r=await a.t.importBackup(file(backup));
++  assert.ok(r.ok);assert.strictEqual(a.ls.data[KD],'{kapot');
++});
++
++test('mislukte lokale opslag tijdens herstel: oude state blijft, kennis niet aangevuld',async()=>{
++  const src=appWithKennis([update('U1',[item('Sprint','a1')])]),backup=src.t.buildFullBackup();backup.team.name='Nieuw';
++  const a=createApp(),name=a.t.state.team.name;a.ls.failWrites=true;
++  const r=await a.t.importBackup(file(backup));
++  assert.strictEqual(r.ok,false);assert.strictEqual(a.t.state.team.name,name);assert.ok(!a.ls.data[KD]);
++});
++
++test('bevestigingstekst noemt aantallen en dat kennis alleen wordt aangevuld',()=>{
++  const a=appWithKennis([update('U1',[item('Sprint','a1')])]);
++  const plan=a.t.backupRestorePlan(a.t.buildFullBackup(),a.t.state,{items:[],updates:[]});
++  const txt=a.t.backupConfirmText(plan);
++  assert.ok(/spelers/.test(txt)&&/trainingen/.test(txt)&&/AANGEVULD/.test(txt)&&/nooit overschreven/.test(txt));
++  assert.strictEqual(plan.knowledgeSummary.newItems,1);
++});
++
++test('back-up van de echte startdata: alle trainingen, aanwezigheid en wedstrijden komen identiek terug',async()=>{
++  const a=createApp(),orig=JSON.parse(JSON.stringify(a.t.state));
++  const b=createApp();
++  const r=await b.t.importBackup(file(a.t.buildFullBackup()));assert.ok(r.ok);
++  assert.strictEqual(b.t.state.trainings.length,orig.trainings.length);
++  assert.deepStrictEqual(b.t.state.trainings.map(t=>t.attendance),orig.trainings.map(t=>t.attendance));
++  assert.deepStrictEqual(b.t.state.matches.map(m=>[m.id,m.lineup,m.benchIds]),orig.matches.map(m=>[m.id,m.lineup,m.benchIds]));
++  assert.deepStrictEqual(b.t.state.players.map(p=>[p.id,p.name,p.teamIds]),orig.players.map(p=>[p.id,p.name,p.teamIds]));
++});
+diff --git a/harness.js b/harness.js
+index b5f7b98..1cda137 100644
+--- a/harness.js
++++ b/harness.js
+@@ -11,7 +11,7 @@ function createApp({store={},failWrites=false,confirmAnswer=true}={}){
+   win.window=win;Object.assign(win,sandbox,{window:win});
+   const ctx=vm.createContext(sandbox);
+   const src=fs.readFileSync(path.join(__dirname,'app.js'),'utf8')+'\n'+fs.readFileSync(path.join(__dirname,'kennis.js'),'utf8')+`
+-;globalThis.__t={get state(){return state},set state(v){state=v},get storageLoadError(){return storageLoadError},save,load,normalize,validateStateData,persistRemoteCopy,writeCloudCopy,pushSync,pullSync,fetchCloudCopy,ensureSession,authSignIn,authSignUp,authSignOut,getAuthSession,storeAuthSession,AUTH_KEY,SYNC_ROW_ID,normalizedStateCopy,STORAGE_KEY,LEGACY_STORAGE_KEY,RECOVERY_BACKUP_KEY,CLOUD_CONFLICT_KEY,SYNC_ACCOUNT_KEY,checkNewSyncPass,initialSync,encryptData,decryptData,syncIdFromPass,vc2Index,vc2Passages,vc2IsSearchable,addExerciseToTraining,STANDARD_PRINCIPLES,seedStandardPrinciples,vc2FileMatches,playerFullName,playerForm,playersForTeam,attendancePct,attendanceStatsForTrainings,eventAttendanceCounts,eventPlayerIds,matchPlayerAvailable,matchPlayerNumber,duplicateMatchNumbers,selectionWarnings,renderAttendance,renderMatches,renderLineupBoard,matchSheetSelectedPlayers,editMatchAvailability,matchSheetModel,matchSheetPages,buildMatchSheetHtml,matchSheetOrderedPlayers,drawMatchImage,runSheetExport,openMatchSheet,trainingMembers,guestCandidates,addTrainingGuest,removeTrainingGuest,editTrainingGroups,renderTrainingDay,kd:{KD_KEY,KD_BACKUP_KEY,KD_EXPORT_FORMAT,kdRead,kdParse,kdImport,kdExportPayload,kdCommit,kdUpdateItem,kdDeleteItem,kdDeleteUpdate,kdSearch,kdCategorize,kdItemKeys,kdGet,kdText,renderKennis,kdHandleClick,kdUi},setModal:f=>{modal=f},setConfirm:f=>{confirm=f},toastLog:()=>__toasts};`;
++;globalThis.__t={get state(){return state},set state(v){state=v},get storageLoadError(){return storageLoadError},save,load,normalize,validateStateData,persistRemoteCopy,writeCloudCopy,pushSync,pullSync,fetchCloudCopy,ensureSession,authSignIn,authSignUp,authSignOut,getAuthSession,storeAuthSession,AUTH_KEY,SYNC_ROW_ID,normalizedStateCopy,STORAGE_KEY,LEGACY_STORAGE_KEY,RECOVERY_BACKUP_KEY,CLOUD_CONFLICT_KEY,SYNC_ACCOUNT_KEY,checkNewSyncPass,initialSync,encryptData,decryptData,syncIdFromPass,vc2Index,vc2Passages,vc2IsSearchable,addExerciseToTraining,STANDARD_PRINCIPLES,seedStandardPrinciples,vc2FileMatches,playerFullName,playerForm,playersForTeam,attendancePct,attendanceStatsForTrainings,eventAttendanceCounts,eventPlayerIds,matchPlayerAvailable,matchPlayerNumber,duplicateMatchNumbers,selectionWarnings,renderAttendance,renderMatches,renderLineupBoard,matchSheetSelectedPlayers,editMatchAvailability,matchSheetModel,matchSheetPages,buildMatchSheetHtml,matchSheetOrderedPlayers,drawMatchImage,runSheetExport,openMatchSheet,trainingMembers,guestCandidates,addTrainingGuest,removeTrainingGuest,editTrainingGroups,renderTrainingDay,kd:{KD_KEY,KD_BACKUP_KEY,KD_EXPORT_FORMAT,kdRead,kdParse,kdImport,kdExportPayload,kdCommit,kdUpdateItem,kdDeleteItem,kdDeleteUpdate,kdSearch,kdCategorize,kdItemKeys,kdGet,kdText,renderKennis,kdHandleClick,kdUi},exportBackup,importBackup,buildFullBackup,backupRestorePlan,backupConfirmText,mergeKnowledgeFiles,BACKUP_FORMAT,APP_VERSION,setModal:f=>{modal=f},setConfirm:f=>{confirm=f},toastLog:()=>__toasts};`;
+   sandbox.__toasts=toasts;
+   vm.runInContext(src.replace(/function toast\(msg\)\{/,'function toast(msg){__toasts.push(msg);'),ctx,{filename:'app.js'});
+   return {t:sandbox.__t,ls,toasts,sandbox,domMap};
+diff --git a/package.json b/package.json
+index 582d6bf..72fca50 100644
+--- a/package.json
++++ b/package.json
+@@ -1 +1 @@
+-{"name":"football-coach","private":true,"scripts":{"check":"node --check app.js && node --check kennis.js","test":"node --test app.test.js kennis.test.js"}}
++{"name":"football-coach","private":true,"scripts":{"check":"node --check app.js && node --check kennis.js","test":"node --test app.test.js kennis.test.js backup.test.js"}}
+-- 
+2.43.0
+

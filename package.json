@@ -1,1 +1,11 @@
-{"name":"football-coach","private":true,"scripts":{"check":"node --check app.js && node --check kennis.js","test":"node --test app.test.js kennis.test.js"}}
+{
+  "name": "football-coach",
+  "private": true,
+  "scripts": {
+    "check": "node --check app.js && node --check kennis.js && node --check sw.js",
+    "test": "node --test",
+    "test:db": "bash supabase/tests/run-local.sh",
+    "test:e2e": "node tests/e2e/chromium.e2e.js"
+  },
+  "version": "2.10.1"
+}

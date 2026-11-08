@@ -1,0 +1,331 @@
+From 7e8d8573db36ca89e2f82c421054821c8378ecd6 Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 15:06:28 +0100
+Subject: [PATCH] =?UTF-8?q?Patch=203:=20veiligheidsrem=20sync=20voor=20all?=
+ =?UTF-8?q?e=20gegevenscategorie=C3=ABn=20(op=20id),=20waarschuwing=20bij?=
+ =?UTF-8?q?=20ophalen;=20tests=20met=20twee=20apparaten,=20race,=20reset,?=
+ =?UTF-8?q?=20seizoensarchief=20en=20herstel?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ app.js                                 |  63 +++++++++-
+ docs/SUPABASE.md                       |   2 +-
+ docs/patches/P3-sync-veiligheidsrem.md |  25 ++++
+ package.json                           |   2 +-
+ sync-veiligheid.test.js                | 159 +++++++++++++++++++++++++
+ 5 files changed, 246 insertions(+), 5 deletions(-)
+ create mode 100644 docs/patches/P3-sync-veiligheidsrem.md
+ create mode 100644 sync-veiligheid.test.js
+
+diff --git a/app.js b/app.js
+index 44d19c7..c6ef41f 100644
+--- a/app.js
++++ b/app.js
+@@ -1894,11 +1894,53 @@ function readSyncBase(){try{const b=JSON.parse(localStorage.getItem(SYNC_BASE_KE
+ function writeSyncBase(userId,updatedAt){try{if(UUID_RE.test(userId||'')&&Number.isFinite(Date.parse(updatedAt)))localStorage.setItem(SYNC_BASE_KEY,JSON.stringify({userId,updatedAt,at:new Date().toISOString()}))}catch{}}
+ function clearSyncBase(){syncSeen=null;try{localStorage.removeItem(SYNC_BASE_KEY)}catch{}}
+ function sameInstant(a,b){const x=Date.parse(a),y=Date.parse(b);return Number.isFinite(x)&&Number.isFinite(y)&&x===y}
+-function syncShrinkWarning(cloudData,local){
+-  const keys=['players','trainings','matches','exercises'],out=[];
+-  keys.forEach(k=>{const c=Array.isArray(cloudData?.[k])?cloudData[k].length:0,l=Array.isArray(local?.[k])?local[k].length:0;if(c-l>=3&&l<c*0.8)out.push(`${k}: ${c} → ${l}`)});
++/* Veiligheidsrem (patch 3): vergelijkt ALLE gegevenscategorieën van de state op verlies t.o.v. een referentieversie.
++   Lijsten worden op id vergeleken (vervangen = verlies), geneste registraties worden opgeteld, onderdelen die leeg
++   raken worden gemeld. Kennis & Ontwikkeling zit niet in de sync en kan door sync dus niet verdwijnen. */
++const SYNC_LOSS_LABELS={players:'spelers',trainings:'trainingen',matches:'wedstrijden',exercises:'oefeningen',tactics:'tactiekborden',seasonItems:'seizoensitems',teams:'teams',coachNotes:'coachnotities',documents:'bronnen',staff:'staf',coachReflections:'reflecties',teamDiagnostics:'teamdiagnoses','templates.trainings':'trainingssjablonen','templates.matches':'wedstrijdsjablonen','gameModel.principles':'spelprincipes',knowledgeFiles:'kennisbankkoppelingen','gameModel.teamModels':'teamstructuren',attendance:'aanwezigheidsregistraties',lineup:'opstellingsplaatsen',benchIds:'bankspelers',playerStats:'wedstrijdstatistieken',planItems:'trainingsonderdelen',guestPlayers:'meetrainers',idpGoals:'ontwikkeldoelen',conversations:'spelersgesprekken',developmentHistory:'ontwikkelmomenten',availability:'beschikbaarheidsmeldingen'};
++function syncGet(o,path){return path.split('.').reduce((x,k)=>x&&typeof x==='object'?x[k]:undefined,o)}
++function syncFilledLeaves(v){if(v===null||v===undefined)return 0;if(typeof v==='string')return v.trim()?1:0;if(typeof v==='number'||typeof v==='boolean')return 1;if(Array.isArray(v))return v.reduce((n,x)=>n+syncFilledLeaves(x),0);if(typeof v==='object')return Object.values(v).reduce((n,x)=>n+syncFilledLeaves(x),0);return 0}
++function syncNestedCounts(d){
++  const c={attendance:new Set(),lineup:new Set(),benchIds:new Set(),playerStats:new Set(),planItems:new Set(),guestPlayers:new Set(),idpGoals:new Set(),conversations:new Set(),developmentHistory:new Set(),availability:new Set()};
++  (d?.trainings||[]).concat(d?.matches||[]).forEach(e=>{
++    Object.entries(e?.attendance||{}).forEach(([k,v])=>{if(v)c.attendance.add(e.id+'|'+k)});
++    (e?.planItems||[]).forEach((x,i)=>c.planItems.add(e.id+'|'+(x?.id||i)));
++    (e?.guestPlayers||[]).forEach((x,i)=>c.guestPlayers.add(e.id+'|'+(x?.id||i)));
++  });
++  (d?.matches||[]).forEach(m=>{
++    Object.entries(m?.lineup||{}).forEach(([k,v])=>{if(v)c.lineup.add(m.id+'|'+k)});
++    (m?.benchIds||[]).forEach(x=>c.benchIds.add(m.id+'|'+x));
++    Object.keys(m?.playerStats||{}).forEach(x=>c.playerStats.add(m.id+'|'+x));
++    Object.entries(m?.availability||{}).forEach(([k,v])=>{if(v&&v.status&&v.status!=='Beschikbaar')c.availability.add(m.id+'|'+k)});
++  });
++  (d?.players||[]).forEach(p=>{
++    (p?.idp?.goals||[]).forEach((g,i)=>c.idpGoals.add(p.id+'|'+(g?.id||i)));
++    (p?.conversations||[]).forEach((g,i)=>c.conversations.add(p.id+'|'+(g?.id||g?.date||i)));
++    (p?.developmentHistory||[]).forEach((g,i)=>c.developmentHistory.add(p.id+'|'+(g?.date||i)));
++  });
++  return c;
++}
++function syncLossReport(ref,local){
++  const out=[],push=(key,removed,total,why)=>out.push({key,label:SYNC_LOSS_LABELS[key]||key,removed,total,why});
++  const tooMuch=(removed,total)=>removed>=10||(removed>=3&&removed>=total*0.2);
++  ['players','trainings','matches','exercises','tactics','seasonItems','teams','coachNotes','documents','staff','coachReflections','teamDiagnostics','templates.trainings','templates.matches','gameModel.principles'].forEach(k=>{
++    const a=syncGet(ref,k),b=syncGet(local,k);if(!Array.isArray(a)||!a.length)return;
++    const list=Array.isArray(b)?b:[];
++    const withId=a.every(x=>x&&x.id),ids=new Set(list.map(x=>x&&x.id));
++    const removed=withId?a.filter(x=>!ids.has(x.id)).length:Math.max(0,a.length-list.length);
++    if(k==='teams'&&removed>=1)return push(k,removed,a.length,'team verwijderd');
++    if(tooMuch(removed,a.length))push(k,removed,a.length,'veel records weg');
++  });
++  ['knowledgeFiles','gameModel.teamModels'].forEach(k=>{const a=Object.keys(syncGet(ref,k)||{}),b=syncGet(local,k)||{};const removed=a.filter(x=>!(x in b)).length;if(a.length&&tooMuch(removed,a.length))push(k,removed,a.length,'veel koppelingen weg')});
++  // Geneste registraties alleen vergelijken binnen trainingen/wedstrijden/spelers die lokaal nog bestaan;
++  // het verwijderen van een hele training valt al onder de regel voor trainingen.
++  const keep=k=>{const ids=new Set((local?.[k]||[]).map(x=>x&&x.id));return (ref?.[k]||[]).filter(x=>x&&ids.has(x.id))};
++  const na=syncNestedCounts({trainings:keep('trainings'),matches:keep('matches'),players:keep('players')}),nb=syncNestedCounts(local);
++  Object.keys(na).forEach(k=>{const removed=[...na[k]].filter(x=>!nb[k].has(x)).length;if(tooMuch(removed,na[k].size))push(k,removed,na[k].size,'veel registraties gewist')});
++  ['team','club','settings','ai','periodization'].forEach(k=>{if(syncFilledLeaves(ref?.[k])>0&&syncFilledLeaves(local?.[k])===0)push(k,syncFilledLeaves(ref[k]),syncFilledLeaves(ref[k]),'onderdeel leeg')});
+   return out;
+ }
++function syncShrinkWarning(cloudData,local){return syncLossReport(cloudData,local).map(x=>`${x.label}: ${x.removed} van ${x.total} weg`)}
+ function syncCanFastForward(cloud,session,local){
+   const base=readSyncBase();
+   if(!cloud||!base||base.userId!==session.user.id||!sameInstant(base.updatedAt,cloud.updatedAt))return false;
+@@ -1956,6 +1998,21 @@ pushSync=async function(silent=false){
+   }catch(e){syncStatus((e.code==='auth'?'Sessie: ':'Syncfout: ')+e.message);if(!silent)toast(e.code==='auth'?'Niet ingelogd of sessie verlopen':'Sync mislukt');if(e.code==='auth')renderAuthState()}
+   finally{syncInFlight=false}
+ };
++/* Patch 3 · Ophalen uit de cloud: vooraf tonen wat lokaal verloren zou gaan (herstelpunt blijft bestaan). */
++pullSync=async function(silent=false){
++  const s=getSync();if(!syncConfigured()||syncInFlight)return;
++  syncInFlight=true;
++  try{
++    syncStatus('Gegevens ophalen…');
++    const session=await ensureSession(),cloud=await fetchCloudCopy(s,session);
++    if(!cloud){syncStatus('Nog geen clouddata voor dit account. Upload dit apparaat eerst.');return}
++    const loss=syncShrinkWarning(normalizedStateCopy(state),normalizedStateCopy(cloud.data));
++    if(!confirm('Clouddata vervangt de lokale versie. De lokale gegevens worden eerst als herstelpunt bewaard.'+(loss.length?`\n\nLet op, lokaal staan gegevens die in de cloud ontbreken en dus verdwijnen:\n• ${loss.join('\n• ')}`:'')+'\n\nDoorgaan?'))return;
++    persistRemoteCopy(cloud.data);approveSyncUser(session.user.id);
++    syncStatus('Clouddata opgehaald; lokale versie als herstelpunt bewaard');if(!silent)toast('Clouddata opgehaald');
++  }catch(e){syncStatus((e.code==='auth'?'Sessie: ':'Syncfout: ')+e.message);if(!silent)toast(e.code==='auth'?'Niet ingelogd of sessie verlopen':'Ophalen mislukt');if(e.code==='auth')renderAuthState()}
++  finally{syncInFlight=false}
++};
+ /* -- 2.10 · Coachassistent: privacy (risico R9) en optionele lokale AI (ADR 0008) --
+    1. Regelgebaseerd blijft de standaard en werkt altijd zonder model.
+    2. Een AI-endpoint mag alleen een LOKAAL adres zijn (dit apparaat of het eigen netwerk), bijv. Ollama.
+diff --git a/docs/SUPABASE.md b/docs/SUPABASE.md
+index ac0cdbf..3b6a4ca 100644
+--- a/docs/SUPABASE.md
++++ b/docs/SUPABASE.md
+@@ -20,7 +20,7 @@
+ 1. Upload: payload lokaal versleuteld; `POST` (nieuwe rij) of `PATCH … &updated_at=eq.<oude waarde>` (optimistische controle). Geen treffer of 409 = conflict: de cloudversie wordt lokaal bewaard (`footballCoachCloudConflictV1`), niets overschreven.
+ 2. Eerste upload naar een account zonder rij vraagt altijd bevestiging.
+ 3. **Nieuw in 2.10 — basisversie:** het apparaat onthoudt de laatst gesynchroniseerde `updated_at` (`footballCoachSyncBaseV1`). Is de cloud sindsdien niet gewijzigd, dan uploadt de stille autosync de lokale wijziging (“fast-forward”). Tot 2.9.1 gaf elke lokale wijziging na een sync bij autosync een conflict, waardoor automatische sync in de praktijk niet uploadde.
+-4. **Veiligheidsrem:** geen stille upload als lokaal per categorie ≥ 3 én ≥ 20 % minder spelers/trainingen/wedstrijden/oefeningen staan dan in de cloud. Na herstel van een back-up, “Terug naar startdata” of seizoen archiveren wordt de basis gewist: eerst handmatig bevestigen.
++4. **Veiligheidsrem (patch 3):** geen stille upload als in **enig** onderdeel van de gegevens ≥ 10, of ≥ 3 én ≥ 20 % van de records verdwijnt (op id vergeleken; ook aanwezigheid, opstellingen, notities, sjablonen, spelprincipes, kennisbankkoppelingen enz.), als een team verdwijnt of als een onderdeel leeg raakt. Ophalen noemt vooraf wat lokaal verdwijnt. Zie `docs/patches/P3-sync-veiligheidsrem.md`. Na herstel van een back-up, “Terug naar startdata” of seizoen archiveren wordt de basis gewist: eerst handmatig bevestigen.
+ 5. Download vervangt lokaal pas na bevestiging; de vorige lokale versie wordt herstelpunt.
+ 
+ Getest met een gesimuleerde PostgREST-server (`sync.test.js`), niet tegen echte Supabase.
+diff --git a/docs/patches/P3-sync-veiligheidsrem.md b/docs/patches/P3-sync-veiligheidsrem.md
+new file mode 100644
+index 0000000..ad5ddf2
+--- /dev/null
++++ b/docs/patches/P3-sync-veiligheidsrem.md
+@@ -0,0 +1,25 @@
++# Patch 3 — Synchronisatie: veiligheidsrem voor alle gegevenscategorieën
++
++## Probleem
++De veiligheidsrem uit 2.10.0 keek alleen naar het **aantal** spelers, trainingen, wedstrijden en oefeningen. Andere onderdelen (notities, teams, sjablonen, spelprincipes, aanwezigheid, opstellingen, statistieken, kennisbankkoppelingen, ontwikkeldoelen …) konden ongemerkt verdwijnen, en “3 verwijderd + 3 nieuw” werd niet gezien.
++
++## Wijziging (`app.js`, sync-blok)
++- `syncLossReport(referentie, lokaal)` vergelijkt **alle** onderdelen van de state:
++  - lijsten **op id** (vervangen telt als verlies): spelers, trainingen, wedstrijden, oefeningen, tactiekborden, seizoensitems, teams, coachnotities, bronnen, staf, reflecties, teamdiagnoses, trainings- en wedstrijdsjablonen, spelprincipes;
++  - koppelingen: kennisbankkoppelingen, teamstructuren;
++  - geneste registraties binnen trainingen/wedstrijden/spelers die blijven bestaan: aanwezigheid, opstellingsplaatsen, bank, wedstrijdstatistieken, beschikbaarheidsmeldingen, trainingsonderdelen, meetrainers, ontwikkeldoelen, gesprekken, ontwikkelmomenten;
++  - onderdelen die leeg raken: team, club, instellingen, AI-instellingen, periodisering.
++- Regel: geen stille upload bij ≥ 10 weg, of ≥ 3 weg én ≥ 20 % van dat onderdeel, of **elk** verwijderd team, of een onderdeel dat leeg raakt. Handmatig uploaden kan nog steeds, na een vraag die het verlies per onderdeel noemt.
++- **Ophalen** uit de cloud noemt vooraf wat lokaal zou verdwijnen (herstelpunt blijft zoals voorheen).
++- Kennis & Ontwikkeling zit niet in de sync en kan door uploaden of ophalen niet veranderen (test).
++
++## Tests (`sync-veiligheid.test.js`, 22)
++Twee apparaten heen en terug · gelijktijdige wijzigingen (conflict, niets stil verloren, bewuste keuze mogelijk) · race tussen ophalen en schrijven · 13 verliesscenario's (o.a. notities, team, aanwezigheid, opstellingen, statistieken, trainingsonderdelen, spelprincipes, sjablonen, kennisbankkoppelingen, ontwikkeldoelen, oefeningen, club leeg, spelers vervangen) · normale bewerkingen gaan wél stil mee · kennis onaangeroerd · ophalen noemt verlies · reset · seizoensarchief · herstel.
++Mutatietest: veiligheidsrem uitgeschakeld → 14 tests falen.
++
++## Risico's
++- Iets vaker een vraag bij handmatig uploaden na grote opruimacties (bedoeld).
++- Niet getest tegen echte Supabase (gesimuleerde PostgREST met dezelfde `updated_at`-controle).
++
++## Implementatie
++`git am -3` op een branch vanaf 2.10.0 → `npm test` → PR → merge door eigenaar. Na merge: op twee echte apparaten een rondje upload/ophalen doen.
+diff --git a/package.json b/package.json
+index 69233b2..cf5d257 100644
+--- a/package.json
++++ b/package.json
+@@ -3,7 +3,7 @@
+   "private": true,
+   "scripts": {
+     "check": "node --check app.js && node --check kennis.js && node --check sw.js",
+-    "test": "node --test app.test.js kennis.test.js backup.test.js sync.test.js ai.test.js rekenregels.test.js static.test.js",
++    "test": "node --test",
+     "test:db": "bash supabase/tests/run-local.sh",
+     "test:e2e": "node tests/e2e/chromium.e2e.js"
+   },
+diff --git a/sync-veiligheid.test.js b/sync-veiligheid.test.js
+new file mode 100644
+index 0000000..6d48aff
+--- /dev/null
++++ b/sync-veiligheid.test.js
+@@ -0,0 +1,159 @@
++// Patch 3 — veiligheidsrem voor alle gegevenscategorieën, twee apparaten, gelijktijdige wijzigingen,
++// herstel, reset en seizoensarchief. Gesimuleerde PostgREST-server; geen echte Supabase.
++const test=require('node:test'),assert=require('node:assert');
++const {createApp}=require('./harness.js');
++const UID='11111111-2222-3333-4444-555555555555',PASS='geheim',KD='footballCoachKnowledgeV1';
++const res=(body,status=200)=>({ok:status>=200&&status<300,status,json:async()=>body,text:async()=>typeof body==='string'?body:JSON.stringify(body)});
++const pgTime=ms=>new Date(ms).toISOString().replace('Z','+00:00');
++function server(){
++  const srv={row:null,calls:[],beforePatch:null};
++  srv.fetch=async(url,opt={})=>{
++    const method=opt.method||'GET';srv.calls.push({url,method});
++    if(url.endsWith('/auth/v1/user'))return res({id:UID});
++    if(method==='GET')return res(srv.row?[{...srv.row}]:[]);
++    if(method==='POST'){if(srv.row)return res('dup',409);const b=JSON.parse(opt.body)[0];srv.row={payload:b.payload,updated_at:pgTime(Date.parse(b.updated_at))};return res([srv.row],201)}
++    if(method==='PATCH'){
++      if(srv.beforePatch){const f=srv.beforePatch;srv.beforePatch=null;await f()}
++      const m=decodeURIComponent(url).match(/updated_at=eq\.([^&]+)/);
++      if(!srv.row||!m||Date.parse(m[1])!==Date.parse(srv.row.updated_at))return res([]);
++      const b=JSON.parse(opt.body);srv.row={payload:b.payload,updated_at:pgTime(Date.parse(b.updated_at))};return res([srv.row]);
++    }
++    return res('?',400);
++  };
++  return srv;
++}
++function device(srv,{store}={}){
++  const a=createApp({store});a.sandbox.fetch=srv.fetch;
++  a.ls.data['footballCoachSyncV1']=JSON.stringify({pass:PASS});
++  a.ls.data[a.t.AUTH_KEY]=JSON.stringify({access_token:'tok',refresh_token:'ref',expires_at:Date.now()+3600000,user:{id:UID,email:'a@b.nl'}});
++  return a;
++}
++const writes=srv=>srv.calls.filter(c=>c.method==='POST'||c.method==='PATCH').length;
++const cloud=async(srv,a)=>a.t.decryptData(srv.row.payload,PASS);
++async function synced(){const srv=server(),a=device(srv);await a.t.pushSync(false);return {srv,a}}
++
++test('twee apparaten: A uploadt, B haalt op, B wijzigt (stil), A haalt op — alles komt over',async()=>{
++  const {srv,a}=await synced(),b=device(srv);
++  await b.t.pullSync(false);
++  b.t.state.coachNotes.push({id:'n-b',teamId:b.t.state.teams[0].id,date:'2026-11-01',category:'Training',text:'van B'});
++  await b.t.pushSync(true);
++  assert.ok((await cloud(srv,a)).coachNotes.some(n=>n.id==='n-b'));
++  await a.t.pullSync(false);
++  assert.ok(a.t.state.coachNotes.some(n=>n.id==='n-b'));
++});
++
++test('gelijktijdige wijzigingen: tweede apparaat krijgt een conflict, niets gaat stil verloren',async()=>{
++  const {srv,a}=await synced(),b=device(srv);await b.t.pullSync(false);
++  a.t.state.team.name='Wijziging A';b.t.state.team.name='Wijziging B';
++  await a.t.pushSync(true);
++  const n=writes(srv);await b.t.pushSync(true);
++  assert.strictEqual(writes(srv),n,'B uploadt niet stil');
++  assert.strictEqual((await cloud(srv,a)).team.name,'Wijziging A');
++  assert.strictEqual(b.t.state.team.name,'Wijziging B','lokale wijziging B behouden');
++  assert.strictEqual(JSON.parse(b.ls.data[b.t.CLOUD_CONFLICT_KEY]).data.team.name,'Wijziging A','versie A bewaard op B');
++  let asked=false;b.sandbox.confirm=()=>{asked=true;return true};
++  await b.t.pushSync(false);                       // bewuste keuze van de trainer
++  assert.ok(asked);assert.strictEqual((await cloud(srv,a)).team.name,'Wijziging B');
++  a.t.state.team.name='A opnieuw';const m=writes(srv);await a.t.pushSync(true);
++  assert.strictEqual(writes(srv),m,'A merkt dat de cloud intussen is gewijzigd');
++});
++
++test('race: cloud wijzigt tussen ophalen en schrijven → PATCH raakt niets, conflict bewaard',async()=>{
++  const {srv,a}=await synced(),b=device(srv);await b.t.pullSync(false);
++  b.t.state.team.name='Tussendoor';
++  a.t.state.team.name='Bijna geschreven';
++  srv.beforePatch=async()=>{await b.t.pushSync(true)};
++  await a.t.pushSync(true);
++  assert.strictEqual((await cloud(srv,a)).team.name,'Tussendoor');
++  assert.strictEqual(a.t.state.team.name,'Bijna geschreven');
++  assert.strictEqual(JSON.parse(a.ls.data[a.t.CLOUD_CONFLICT_KEY]).data.team.name,'Tussendoor');
++});
++
++const CASES=[
++  ['coachnotities',s=>{s.coachNotes=[]},s=>{for(let i=0;i<5;i++)s.coachNotes.push({id:'n'+i,teamId:s.teams[0].id,date:'2026-10-0'+(i+1),category:'Training',text:'x'})}],
++  ['teams',s=>{s.teams=s.teams.slice(0,1)},s=>{s.teams.push({id:'team-2',name:'Tweede',shortName:'2'})}],
++  ['aanwezigheidsregistraties',s=>{s.trainings.forEach(t=>{t.attendance={}})}],
++  ['opstellingsplaatsen',s=>{s.matches.forEach(m=>{m.lineup={}})},s=>{s.matches.forEach(m=>{['GK','LB','LCB','RCB','RB'].forEach((k,i)=>{m.lineup[k]=s.players[i].id})})}],
++  ['wedstrijdstatistieken',s=>{s.matches.forEach(m=>{m.playerStats={}})},s=>{s.matches.forEach(m=>{s.players.slice(0,3).forEach(p=>{m.playerStats[p.id]={minutes:90}})})}],
++  ['trainingsonderdelen',s=>{s.trainings.forEach(t=>{t.planItems=[];t.exerciseIds=[]})},s=>{s.trainings.slice(0,4).forEach(t=>{t.planItems=[{id:'pi-'+t.id,exerciseId:s.exercises[0].id,duration:10}]})}],
++  ['spelprincipes',s=>{s.gameModel.principles=[]}],
++  ['trainingssjablonen',s=>{s.templates.trainings=[]},s=>{for(let i=0;i<3;i++)s.templates.trainings.push({id:'tpl'+i,name:'T'+i,planItems:[]})}],
++  ['kennisbankkoppelingen',s=>{s.knowledgeFiles={}},s=>{s.knowledgeFiles={a:{name:'a.pdf'},b:{name:'b.pdf'},c:{name:'c.pdf'}}}],
++  ['ontwikkeldoelen',s=>{s.players.forEach(p=>{p.idp.goals=[]})},s=>{s.players.slice(0,4).forEach((p,i)=>{p.idp.goals.push({id:'g'+i,title:'Doel'})})}],
++  ['oefeningen',s=>{s.exercises=s.exercises.slice(0,5)}],
++  ['club (onderdeel leeg)',s=>{s.club={}},s=>{s.club={name:'D.S.V. Full Speed'}}],
++  ['spelers vervangen door anderen (zelfde aantal)',s=>{s.players.forEach((p,i)=>{p.id='nieuw-'+i})}],
++];
++for(const [naam,mutate,prepare] of CASES){
++  test(`veiligheidsrem: ${naam} — geen stille upload, wel vraag bij handmatig uploaden`,async()=>{
++    const srv=server(),a=device(srv);
++    if(prepare){prepare(a.t.state);a.t.normalize()}
++    await a.t.pushSync(false);const n=writes(srv),before=JSON.stringify(await cloud(srv,a));
++    mutate(a.t.state);
++    await a.t.pushSync(true);
++    assert.strictEqual(writes(srv),n,'geen stille upload');
++    assert.strictEqual(JSON.stringify(await cloud(srv,a)),before,'cloud ongewijzigd');
++    let msg='';a.sandbox.confirm=m=>{msg=m;return false};
++    await a.t.pushSync(false);
++    assert.ok(/minder gegevens|weg|leeg/.test(msg),'melding noemt het verlies: '+msg.slice(0,120));
++    assert.strictEqual(writes(srv),n);
++  });
++}
++
++test('normale bewerkingen gaan wél stil mee (geen valse blokkade)',async()=>{
++  const {srv,a}=await synced();const s=a.t.state;let n=writes(srv);
++  const steps=[
++    ()=>{s.trainings.push({id:'tr-nieuw',teamId:s.teams[0].id,date:'2026-11-20',attendance:{},planItems:[]})},
++    ()=>{s.trainings=s.trainings.filter(t=>t.id!==s.trainings[0].id)},          // 1 training verwijderen
++    ()=>{const t=s.trainings[1];Object.keys(t.attendance).slice(0,2).forEach(k=>{t.attendance[k]='Afwezig'})},
++    ()=>{s.players[0].firstName='Hernoemd';s.players[0].name='Hernoemd X'},
++    ()=>{s.matches[0].lineup.GK=s.players[0].id},
++    ()=>{delete s.matches[0].lineup.GK},
++    ()=>{s.players[1].active=false},
++  ];
++  for(const st of steps){st();await a.t.pushSync(true);assert.strictEqual(writes(srv),++n,'stap '+st.toString().slice(0,60))}
++});
++
++test('Kennis & Ontwikkeling wordt door uploaden en ophalen nooit aangeraakt',async()=>{
++  const {srv,a}=await synced();
++  const kd=JSON.stringify({version:1,updates:[],items:[{id:'i1',raw:{title:'Lokaal artikel'},category:'Overig'}]});
++  a.ls.data[KD]=kd;
++  a.t.state.team.name='X';await a.t.pushSync(true);
++  const b=device(srv);b.ls.data[KD]='{"version":1,"updates":[],"items":[]}';
++  await b.t.pullSync(false);await a.t.pullSync(false);
++  assert.strictEqual(a.ls.data[KD],kd);assert.strictEqual(b.ls.data[KD],'{"version":1,"updates":[],"items":[]}');
++  assert.ok(!JSON.stringify(await cloud(srv,a)).includes('Lokaal artikel'));
++});
++
++test('ophalen uit de cloud noemt vooraf wat lokaal verdwijnt; annuleren wijzigt niets',async()=>{
++  const {srv,a}=await synced(),b=device(srv);await b.t.pullSync(false);
++  for(let i=0;i<4;i++)b.t.state.coachNotes.push({id:'lokaal-'+i,teamId:b.t.state.teams[0].id,date:'2026-11-01',category:'Training',text:'alleen lokaal'});
++  const before=JSON.stringify(b.t.state);let msg='';b.sandbox.confirm=m=>{msg=m;return false};
++  await b.t.pullSync(false);
++  assert.ok(/coachnotities: 4 van 4 weg/.test(msg),msg);
++  assert.strictEqual(JSON.stringify(b.t.state),before);
++});
++
++function clickButton(a,attr){a.t.handleClick({target:{closest:()=>({hasAttribute:k=>k===attr,dataset:{}})}})}
++test('terug naar startdata: sync-basis gewist, niets stil naar de cloud',async()=>{
++  const {srv,a}=await synced();const n=writes(srv);
++  a.t.state.team.name='voor reset';
++  clickButton(a,'data-reset');
++  assert.strictEqual(a.t.readSyncBase(),null);
++  await a.t.pushSync(true);assert.strictEqual(writes(srv),n);
++});
++test('seizoen archiveren: sync-basis gewist, lege trainingslijst niet stil geüpload',async()=>{
++  const {srv,a}=await synced();const n=writes(srv);
++  a.sandbox.prompt=()=>'2027/2028';
++  clickButton(a,'data-archive-season');
++  assert.strictEqual(a.t.state.trainings.length,0,'archiveren uitgevoerd');
++  assert.strictEqual(a.t.readSyncBase(),null);
++  await a.t.pushSync(true);assert.strictEqual(writes(srv),n);
++  assert.ok((await cloud(srv,a)).trainings.length>0,'cloud behoudt het seizoen');
++});
++test('herstel van back-up: sync-basis gewist, eerst handmatig bevestigen',async()=>{
++  const {srv,a}=await synced();const n=writes(srv);
++  const txt=JSON.stringify(a.t.buildFullBackup());
++  await a.t.importBackup({size:txt.length,text:async()=>txt});
++  await a.t.pushSync(true);assert.strictEqual(writes(srv),n);
++});
+-- 
+2.43.0
+

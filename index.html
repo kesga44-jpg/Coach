@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=2.9.1">
+  <link rel="stylesheet" href="style.css?v=2.10.1">
 </head>
 <body>
   <div class="app-shell">
@@ -21,7 +21,7 @@
         <div><strong id="brandTeam">Full Speed O23</strong><span>Football Coach</span></div>
       </div>
       <nav class="side-nav" aria-label="Hoofdnavigatie">
-        <button class="nav-item active" data-page="dashboard">⌂ <span>Vandaag</span></button>
+        <button class="nav-item active" data-page="dashboard" aria-current="page">⌂ <span>Vandaag</span></button>
         <button class="nav-item" data-page="players">♙ <span>Teams & spelers</span></button>
         <button class="nav-item" data-page="attendance">✓ <span>Aanwezigheid</span></button>
         <button class="nav-item" data-page="trainings">◫ <span>Trainingen</span></button>
@@ -43,23 +43,23 @@
     <main class="main-area">
       <header class="topbar">
         <div><p class="eyebrow" id="pageEyebrow">SEIZOEN 2026/2027</p><h1 id="pageTitle">Vandaag</h1></div>
-        <div class="top-actions"><span id="connectionState" class="connection-state online">● Online</span><button class="icon-btn" data-global-search title="Zoeken">⌕</button><button class="icon-btn" id="undoAction" data-undo-action title="Ongedaan maken" disabled>↶</button><select id="globalTeamSelect" class="team-select" aria-label="Actief team"></select><button class="icon-btn" id="quickAdd" title="Snel toevoegen">＋</button></div>
+        <div class="top-actions"><span id="connectionState" class="connection-state online">● Online</span><button class="icon-btn" data-global-search title="Zoeken" aria-label="Zoeken">⌕</button><button class="icon-btn" id="undoAction" data-undo-action title="Ongedaan maken" aria-label="Ongedaan maken" disabled>↶</button><select id="globalTeamSelect" class="team-select" aria-label="Actief team"></select><button class="icon-btn" id="quickAdd" title="Snel toevoegen" aria-label="Snel toevoegen">＋</button></div>
       </header>
       <section id="app" class="content"></section>
     </main>
   </div>
 
   <nav class="bottom-nav" aria-label="Mobiele navigatie">
-    <button class="active" data-page="dashboard"><span>⌂</span><small>Vandaag</small></button>
-    <button data-page="players"><span>♙</span><small>Team</small></button>
-    <button data-page="matches"><span>⚽</span><small>Wedstrijden</small></button>
-    <button data-page="stats"><span>▥</span><small>Statistieken</small></button>
-    <button data-page="more"><span>•••</span><small>Meer</small></button>
+    <button class="active" data-page="dashboard" aria-current="page" aria-label="Vandaag"><span aria-hidden="true">⌂</span><small>Vandaag</small></button>
+    <button data-page="players" aria-label="Team"><span aria-hidden="true">♙</span><small>Team</small></button>
+    <button data-page="matches" aria-label="Wedstrijden"><span aria-hidden="true">⚽</span><small>Wedstrijden</small></button>
+    <button data-page="stats" aria-label="Statistieken"><span aria-hidden="true">▥</span><small>Statistieken</small></button>
+    <button data-page="more" aria-label="Meer"><span aria-hidden="true">•••</span><small>Meer</small></button>
   </nav>
 
   <dialog id="modal">
     <form method="dialog" class="modal-card">
-      <div class="modal-head"><h2 id="modalTitle"></h2><button value="cancel" class="icon-btn">×</button></div>
+      <div class="modal-head"><h2 id="modalTitle"></h2><button value="cancel" class="icon-btn" aria-label="Sluiten">×</button></div>
       <div id="modalBody"></div>
       <div class="modal-actions"><button value="cancel" class="btn ghost">Annuleren</button><button id="modalSave" value="default" class="btn primary">Opslaan</button></div>
     </form>
@@ -69,9 +69,9 @@
   <input id="knowledgeFileBulk" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden>
   <input id="kdFile" type="file" accept="application/json,.json" hidden>
   <input id="docFile" type="file" accept=".pdf,.docx,.xlsx,.xlsm,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-  <div id="toast" class="toast" role="status"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="kennis.js?v=1"></script>
-  <script src="app.js?v=2.9.1"></script>
+  <script src="kennis.js?v=3"></script>
+  <script src="app.js?v=2.10.1"></script>
 </body>
 </html>

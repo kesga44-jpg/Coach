@@ -1,0 +1,49 @@
+From 58a9c6f0f3caffd9f2c82a16d08fa07f7a42bd2a Mon Sep 17 00:00:00 2001
+From: "Claude (voor Kees)" <noreply@anthropic.com>
+Date: Sun, 8 Nov 2026 14:27:45 +0100
+Subject: [PATCH 7/9] Browsertest: XSS-controle met kwaadaardige namen en
+ teksten op alle pagina's
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01DXboTaxh6jT2sciprWxEq6
+---
+ tests/e2e/chromium.e2e.js | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/tests/e2e/chromium.e2e.js b/tests/e2e/chromium.e2e.js
+index 2a6289d..ebe05b6 100644
+--- a/tests/e2e/chromium.e2e.js
++++ b/tests/e2e/chromium.e2e.js
+@@ -46,6 +46,29 @@ const PAGES=['dashboard','players','attendance','trainings','exercises','matches
+     });
+   }
+ 
++  await step('XSS: kwaadaardige namen/teksten worden op alle pagina\'s als tekst getoond, niet uitgevoerd',async()=>{
++    const ctx=await browser.newContext({viewport:{width:1280,height:900}}),page=await ctx.newPage();
++    const X='<img src=x onerror="window.__xss=(window.__xss||0)+1">';
++    await page.goto(base);await page.waitForTimeout(200);
++    await page.evaluate(X=>{const d=JSON.parse(localStorage.getItem('footballCoachDataV2'));
++      d.players[0].firstName=X;d.players[0].lastName=X;d.players[0].name=X+' '+X;d.players[0].notes=X;d.players[0].developmentGoals=X;
++      d.teams[0].name=X;d.matches[0].opponent=X;d.matches[0].notes=X;d.exercises[0].name=X;d.exercises[0].description=X;
++      d.trainings[0].focus=X;d.trainings[0].coachNotes=X;d.coachNotes.push({id:'nx',teamId:d.teams[0].id,date:'2026-10-01',category:'Training',text:X});
++      localStorage.setItem('footballCoachDataV2',JSON.stringify(d));
++      localStorage.setItem('footballCoachKnowledgeV1',JSON.stringify({version:1,updates:[{id:'u',fingerprint:'f',importedAt:'2026',root:{title:X,update_date:'2026-10-01',next_training_action:X},itemIds:['i']}],items:[{id:'i',updateId:'u',category:'Overig',raw:{title:X,source:'javascript:alert(1) '+X,key_findings:X}}]}));
++    },X);
++    await page.reload();await page.waitForTimeout(300);
++    for(const p of PAGES){await page.click(`.side-nav [data-page="${p}"]`);await page.waitForTimeout(100)}
++    await page.click('.side-nav [data-page="players"]');await page.waitForTimeout(100);
++    const prof=await page.$('[data-player-profile],[data-open-player],[data-player]');if(prof){await prof.click().catch(()=>{});await page.waitForTimeout(150)}
++    await page.evaluate(()=>{if(typeof setPage==='function')setPage('kennis')});await page.waitForTimeout(150);
++    for(const tab of ['advies','artikelen']){const b=await page.$(`[data-kd="tab"][data-kd-id="${tab}"]`);if(b){await b.click();await page.waitForTimeout(100)}}
++    const hits=await page.evaluate(()=>window.__xss||0);
++    const jsLinks=await page.$$eval('a[href^="javascript:"]',a=>a.length);
++    assert(hits===0,`script uitgevoerd (${hits}x)`);assert(jsLinks===0,'javascript:-link gevonden');
++    await ctx.close();
++  });
++
+   await step('back-up downloaden bevat backupMeta en Kennis & Ontwikkeling',async()=>{
+     const ctx=await browser.newContext({acceptDownloads:true}),page=await ctx.newPage();
+     await page.addInitScript(()=>{if(!localStorage.getItem('footballCoachKnowledgeV1'))localStorage.setItem('footballCoachKnowledgeV1',JSON.stringify({version:1,updates:[{id:'u1',fingerprint:'f',importedAt:'2026-10-01',root:{title:'U'},itemIds:['i1']}],items:[{id:'i1',updateId:'u1',category:'Overig',raw:{title:'E2E-artikel',source:'Bron'}}]}))});
+-- 
+2.43.0
+
