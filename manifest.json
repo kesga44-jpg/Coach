@@ -1,7 +1,7 @@
 {
   "name": "Football Coach - Full Speed O23",
   "short_name": "Coach O23",
-  "description": "Football Coach v2.10.1 · teambeheer, trainingen en wedstrijdvoorbereiding",
+  "description": "Football Coach v2.11.0 · teambeheer, trainingen en wedstrijdvoorbereiding",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

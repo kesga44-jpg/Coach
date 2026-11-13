@@ -2,6 +2,16 @@
 
 Formaat: per versie Toegevoegd / Gewijzigd / Beveiliging / Tests / Documentatie / Niet gedaan. Oudere versies: zie [LEESMIJ.md](LEESMIJ.md).
 
+## [2.11.0] — 2026-11-13
+
+### Gewijzigd
+- Wedstrijdblad opnieuw vormgegeven naar de rustige DSV Full Speed-huisstijl met logo, licht informatiepaneel, groene selectiebalk en subtiele watermark.
+- Wedstrijdselectie gebruikt de kolommen Naam en Opmerking; blessure-/afwezigheidsstatus, doorgeschoven spelers, wedstrijddagopmerkingen en praktische gegevens blijven gekoppeld aan de actuele wedstrijd.
+- Lege categorieën tonen alleen schrijfruimte; geen voorbeeldspelers of fictieve wedstrijdgegevens toegevoegd. PDF en print blijven op één A4-pagina.
+
+### Tests
+- Regressietests controleren de nieuwe onderdelen, lege schrijfruimte, wedstrijdvelden en behoud van bestaande selectie-/statusgegevens.
+
 ## [2.10.1] — 2026-11-08 (herstelronde, branch `herstel/2.10.1`, nog niet gemerged)
 
 Vier onafhankelijk toepasbare patches op 2.10.0 (`release/patches/2.10.1-herstel/`), plus deze samenvoegcommit.

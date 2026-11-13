@@ -455,21 +455,33 @@ test('wedstrijdblad: rugnummer en naam gescheiden, selectievolgorde en spelers v
   assert.deepStrictEqual(Array.from(md.rows.map(r=>r.number)),['1','4','5','17']);
   assert.ok(md.rows[3].fromTeam);assert.strictEqual(md.rows[0].fromTeam,'');
   const html=a.t.buildMatchSheetHtml(m);
-  assert.ok(html.includes('<td class="num">17</td>'));assert.ok(html.includes('D.S.V. Full Speed'));assert.ok(html.includes('FC Test'));
+  assert.ok(html.includes('<span class="number">#17</span>'));assert.ok(html.includes('DSV Full Speed'));assert.ok(html.includes('FC Test'));
 });
-test('wedstrijdblad: geen speler in meerdere categorieën en lege onderdelen verborgen',()=>{
+test('wedstrijdblad: categorieën behouden bestaande spelers en blijven leeg invulbaar',()=>{
   const {a,m}=sheetFixture(),md=a.t.matchSheetModel(m),all=[...md.rows.map(r=>r.id),...md.promotedFirst,...md.promotedOther,...md.injured,...md.absent].map(x=>x.id||x);
   assert.strictEqual(new Set(all).size,all.length);
   assert.deepStrictEqual(Array.from(md.promotedFirst.map(x=>x.id)),['p1']);assert.deepStrictEqual(Array.from(md.promotedOther.map(x=>x.id)),['p2']);
   assert.deepStrictEqual(Array.from(md.injured.map(x=>x.id)),['inj']);assert.strictEqual(md.injured[0].note,'Enkel');
   assert.deepStrictEqual(Array.from(md.absent.map(x=>x.id)),['abs']);assert.strictEqual(md.absent[0].note,'Werk');
   const html=a.t.buildMatchSheetHtml(m);
-  assert.ok(html.includes('Doorgeschoven naar het eerste elftal'));assert.ok(html.includes('Doorgeschoven naar een ander team'));
-  assert.ok(!html.includes('Tenue'));assert.ok(!html.includes('Kleedkamer'));assert.ok(!html.includes('Wedstrijdinstructies'));
+  assert.ok(html.includes('Doorgeschoven naar 1e'));assert.ok(html.includes('Doorgeschoven naar O23-2'));
+  assert.ok(html.includes('Blessures')&&html.includes('Afwezig')&&html.includes('Opmerkingen wedstrijddag'));
+  assert.ok(html.includes('Tenue')&&html.includes('Kleedkamer')&&html.includes('Bijzonderheden'));
   m.kit='Groen';m.lockerRoom='3';m.sheetNote='Pressen';
   const full=a.t.buildMatchSheetHtml(m);assert.ok(full.includes('Tenue')&&full.includes('Kleedkamer')&&full.includes('Pressen'));
   m.promotedFirstIds=[];m.promotedO232Ids=[];m.availability={};
-  const empty=a.t.buildMatchSheetHtml(m);assert.ok(!empty.includes('Doorgeschoven naar'));assert.ok(!empty.includes('class="cat '));
+  const empty=a.t.buildMatchSheetHtml(m);assert.ok(empty.includes('Doorgeschoven naar 1e')&&empty.includes('Doorgeschoven naar O23-2'));
+  assert.ok(empty.includes('Blessures')&&empty.includes('Afwezig')&&empty.includes('Opmerkingen wedstrijddag'));
+});
+test('wedstrijdblad: gewenste A4-opmaak toont wedstrijdvelden en geen fictieve selectie',()=>{
+  const {a,m}=sheetFixture();m.lineup={};m.benchIds=[];m.squadPlayerIds=[];
+  const html=a.t.buildMatchSheetHtml(m);
+  ['MEER DAN VOETBAL','WEDSTRIJDDAG DOCUMENT','Datum','Locatie','Trainers','Thuis / uit','Tegenstander','Wedstrijdtype','Aanvang','Verzamelen','Naam','Opmerking','DSV FULL SPEED · DELFT'].forEach(text=>assert.ok(html.includes(text),text));
+  assert.ok(html.includes('class="info-card"')&&html.includes('grid-template-columns:1fr 1fr'));
+  assert.ok(html.includes('<th>Naam</th><th>Opmerking</th>'));
+  assert.strictEqual((html.match(/class="blank-row"/g)||[]).length,18);
+  assert.ok(!html.includes('<td class="name">Piet Keeper</td>'));
+  assert.ok(html.includes('class="write-line"')&&html.includes('class="practical-grid"'));
 });
 test('wedstrijdblad: grote selectie en alle extra informatie blijven op één A4-pagina',()=>{
   const {a,m,team}=sheetFixture();

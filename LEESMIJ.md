@@ -7,6 +7,10 @@ Statische app (`index.html`, `app.js`, `style.css`, `sw.js`). Lokale opslag: `fo
 - `node --test app.test.js` — tests (geen dependencies; `app.js` draait in een vm met browserstubs, sync met gemockte `fetch`)
 - CI: `.github/workflows/tests.yml` draait `npm run check` en `npm test` (Node.js 22, Ubuntu 24.04) bij elke pull request en push naar `main`. Alleen leesrechten, geen secrets, geen Supabase-verbinding.
 
+### Coach main 2.11.0 — DSV Full Speed-wedstrijdblad
+- A4/PDF-selectieblad volgt de aangeleverde rustige clubhuisstijl, met wedstrijdgegevens, selectie, doorgeschoven spelers, blessures, afwezigen, wedstrijddagopmerkingen en praktische informatie.
+- Alle delen gebruiken de bestaande wedstrijd- en spelersgegevens; lege blokken bieden schrijfruimte zonder fictieve invuldata.
+
 ### Coach main 2.10.0 — back-up incl. kennis, veilige autosync, privacy coachassistent
 Overzicht en documentatie: [README.md](README.md) en `docs/`. Wijzigingen: [CHANGELOG.md](CHANGELOG.md).
 - Back-up bevat nu ook Kennis & Ontwikkeling; herstel vult kennis alleen aan (nooit overschrijven/verwijderen) en behoudt kennisbankkoppelingen.
