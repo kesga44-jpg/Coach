@@ -1,11 +1,11 @@
 # Privacy-audit Git-geschiedenis (alleen refs, bestanden en categorieën)
 
-Uitgevoerd read-only op een volledige kloon (39 commits, 16 refs, alle branches/tags). Er zijn geen persoonsgegevens in dit document opgenomen.
+Uitgevoerd read-only op een volledige kloon (70 commits, 16 refs, alle branches/tags). Er zijn geen persoonsgegevens in dit document opgenomen.
 
 ## Bevindingen
 | Categorie | Resultaat | Referenties |
 |---|---|---|
-| Echte spelersgegevens in startdata (`window.STARTER_DATA` in `app.js` zonder `"fictional":true`) | **Aanwezig** in 49 van de 97 gescande (commit, `app.js`)-combinaties; fictieve data pas vanaf `b956f63` (2.10.1) | `app.js` in alle commits vóór `b956f63`; ook `starter-data.js` / `starter-data.json` (3 commits, o.a. `081c00d`, `27ba10b`) |
+| Echte spelersgegevens in startdata (`window.STARTER_DATA` in `app.js` zonder `"fictional":true`) | **Aanwezig** in 49 van de 70 commits in alle refs; fictieve data pas vanaf `b956f63` (2.10.1) | `app.js` in alle commits vóór `b956f63`; ook `starter-data.js` / `starter-data.json` (3 commits, o.a. `081c00d`, `27ba10b`) |
 | Aanwezigheid/blessure-/ziekteredenen (bijzondere persoonsgegevens, indicatie) | Volgens `docs/SECURITY.md` S8 aanwezig in dezelfde startdata; niet opnieuw geïnspecteerd | idem |
 | Secrets (service_role-/`sb_secret_`-waarden, JWT, privésleutel, AWS/GitHub-tokens) | **Geen waarden gevonden**; alleen de *namen* in docs en secret-scan-tests | `sleutels.test.js`, `static.test.js`, `.env.example`, `docs/SUPABASE.md`, `docs/patches/P2-*`, `release/patches/**` |
 | Publishable key `sb_publishable_…` | Aanwezig in `app.js`; bedoeld als publiek (RLS beschermt) | `app.js` |
