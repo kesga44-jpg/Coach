@@ -2,6 +2,21 @@
 
 Formaat: per versie Toegevoegd / Gewijzigd / Beveiliging / Tests / Documentatie / Niet gedaan. Oudere versies: zie [LEESMIJ.md](LEESMIJ.md).
 
+## [Onuitgebracht] — PDF-beveiliging en privacycontrole
+
+### Beveiliging
+- `readDocumentFile()` (Bronnen-import) opende PDF's zonder `isEvalSupported:false`; beide parsers lopen nu via één helper `pdfjsOpen()` met `isEvalSupported:false` en `enableXfa:false`.
+- Gevonden en hersteld: `fcLoadScript` bestond alleen in het wedstrijdblad-popup-sjabloon; de hoofdapp riep het aan voor PDF.js, mammoth en SheetJS (ReferenceError). Nu top-level gedefinieerd, met opruimen van mislukte script-tags.
+
+### Tests
+- `pdf.test.js`: beide parserpaden, beschadigde en verdachte PDF's, offline, VC2-indexering, tekstimport, statische controle op enige `getDocument`-aanroep.
+
+### Documentatie
+- `docs/PRIVACY_AUDIT_GIT_GESCHIEDENIS.md`: bevindingen (alleen bestanden, refs en categorieën) en voorstel voor veilig herstel.
+
+### Niet gedaan
+- Geen PDF.js-upgrade (4.x+ is ESM-only, CDN niet verifieerbaar vanuit de omgeving), geen SRI, geen geschiedenisherschrijving, geen versiebump.
+
 ## [2.11.0] — 2026-11-13
 
 ### Gewijzigd
