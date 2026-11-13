@@ -29,7 +29,7 @@ test('vervangbestand wordt alleen buiten de repository geschreven en spaart fict
   const txt=fs.readFileSync(uit,'utf8');
   assert.ok(txt.includes('Anna Testpersoon==>Verwijderde speler')&&txt.includes('p-bram-proefkonijn==>p-verwijderd-'));
   const rule=txt.split('\n').find(l=>l.startsWith('regex:')).slice(6).split('==>')[0];
-  const re=new RegExp(rule.replace('(?![^\\n]{0,200}','(?![^\\n]{0,200}'));
+  const re=new RegExp(rule);
   assert.ok(re.test('window.STARTER_DATA={"version":2,"meta":{"source":"x"},"players":[]};'),'echte startdata wordt vervangen');
   assert.ok(!re.test('window.STARTER_DATA={"version":2,"meta":{"createdAt":"x","fictional":true},"players":[]};'),'fictieve startdata blijft');
   const c=run(d,'controle','--namen',uit);
