@@ -7,5 +7,5 @@
     "test:db": "bash supabase/tests/run-local.sh",
     "test:e2e": "node tests/e2e/chromium.e2e.js"
   },
-  "version": "2.10.1"
+  "version": "2.11.0"
 }
